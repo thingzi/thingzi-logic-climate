@@ -1,0 +1,249 @@
+<script type="text/javascript">
+    RED.nodes.registerType('thingzi-climate', {
+        category: 'climate',
+        color: '#9be483',
+        defaults: {
+            name: {value:"", required:true}, 
+            climateType: {value: 'heat', required:true},
+            sendStatus: {value: false, required:true},
+
+            // Configuration
+            keepAlive: {value: 15, required:true},
+            cycleDelay: {value: 30, required:true},
+            boostDuration: {value: 30, required:true},
+
+            // Setpoint
+            degrees: {value: 'C', required:true},
+            defaultSetPoint: {value: 20, required:true},
+            tolerance: {value: 0.2, required:true},    
+            minTemp: {value: 5, required:true},
+            maxTemp: {value: 25, required:true},
+            tempValid: {value: 60, required:true},
+            swapDelay: {value: 60, required:true},
+
+            // Advertise
+            advertise: {value: false, required:true},
+            broker: {type:'mqtt-broker', required:false},
+            topic: {value:'thingzi', required:false},
+            outputs: {value: 2}
+        },
+        inputs: 1,
+        outputs: 2,
+        inputLabels: "payload (mode), power, setpoint, temp",
+        outputLabels: ["heating required","cooling required", "status"],
+        icon: "climate.png",
+        label: function () {
+            return this.name || "climate";
+        },
+        paletteLabel: "climate",
+        oneditprepare: function() {
+            $('#node-input-sendStatus').prop("checked", this.sendStatus);
+            $('#node-input-advertise').prop("checked", this.advertise);
+
+            // Show hide setpoint based on type
+            $('#node-input-climateType').on('change', function(data) {
+                $('#node-input-climateType').val() === 'manual' ? $(".setpoint").hide() : $(".setpoint").show();
+            });
+
+            // Change values on degrees switch
+            let degreesFirstTime = true;
+            $('#node-input-degrees').on('change', function(data) {
+                if (!degreesFirstTime) {
+                    if ($('#node-input-degrees').val() === 'C') {
+                        $('#node-input-defaultSetPoint').val(20);
+                        $('#node-input-tolerance').val(0.2);
+                        $('#node-input-minTemp').val(5);
+                        $('#node-input-maxTemp').val(25);
+                    } else {
+                        $('#node-input-defaultSetPoint').val(70);
+                        $('#node-input-tolerance').val(0.3);
+                        $('#node-input-minTemp').val(40);
+                        $('#node-input-maxTemp').val(80);
+                    }
+                }
+                degreesFirstTime = false;
+            });
+
+            if (!$('#node-input-topic').val()) {
+                $('#node-input-topic').val('thingzi')
+            }
+
+            if (!$('#node-input-degrees').val()) {
+                $('#node-input-degrees').val('C');
+            }
+
+            if (!$('#node-input-minTemp').val()) {
+                $('#node-input-minTemp').val('5')
+            }
+
+            if (!$('#node-input-maxTemp').val()) {
+                $('#node-input-maxTemp').val('25')
+            }
+        },
+        oneditsave: function () {
+            this.outputs = $("#node-input-sendStatus").prop('checked') ? 3 : 2;
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="thingzi-climate">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name" style="width: 70%">
+    </div>
+    <div class="form-row">
+        <label title="Type of climate controller" for="node-input-climateType"><i class="fa fa-gear"></i> Type</label>
+        <select id="node-input-climateType" style="width: 200px">
+            <option value="heat">Heating Only</option>
+            <option value="cool">Cooling Only</option>
+            <option value="both">Heating & Cooling</option>
+            <option value="manual">Manual (no set point)</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label title="Enables an extra output for sending status for debug or deeper integration" for="node-input-sendStatus">
+            <i class="fa fa-info-circle"></i> Send Status
+        </label>
+        <input type="checkbox" id="node-input-sendStatus" style="width: 20px; margin: 0">
+    </div>
+    <hr>
+
+    <h4>Configuration</h4>
+    <div class="form-row">
+        <label title="Some receivers will need regular keep alive messages to prevent a safety cut off.  A regular update also ensures devices are kept in sync if a message is lost." for="node-input-keepAlive">
+            <i class="fa fa-heartbeat"></i> Keep Alive
+        </label>
+        <input type="number" id="node-input-keepAlive" min="0" max="60" style="width: 60px">
+        <label>minute(s)</label>
+    </div>
+    <div class="form-row">
+        <label title="Minimum time for any heating/cooling cycle. Once the cycle begins it will not change for this duration with subsequent requests queued.  This protects equipment such as boilers, which can be damaged by quick changes.  The * symbol will be shown on the node status when a change is pending that occured too quickly." for="node-input-cycleDelay">
+            <i class="fa fa-history"></i> Min Cycle
+        </label>
+        <input type="number" id="node-input-cycleDelay" min="5" max="1200" style="width: 60px">
+        <label>second(s)</label>
+    </div>
+    <div class="form-row">
+        <label title="Duration of climate boost.  This will override any other input settings for the duration of the boost and is designed to overlap scheduling events if needed." for="node-input-boostDuration">
+            <i class="fa fa-rocket"></i> Boost For
+        </label>
+        <input type="number" id="node-input-boostDuration" min="1" max="120" style="width: 60px">
+        <label>minute(s)</label>
+    </div>
+
+    <div class="setpoint">
+        <h4>Set Point</h4>
+        <div class="form-row">
+            <label title="Measurement scale to use for temperature" for="node-input-degrees"><i class="fa fa-thermometer"></i> Degrees</label>
+            <select id="node-input-degrees" style="width: 120px">
+                <option value="C">Celsius</option>
+                <option value="F">Fahrenheit</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <label title="Default set point of the climate controller.  Can be overridden by 'setpoint' input" for="node-input-defaultSetPoint">
+                <i class="fa fa-dashboard"></i> Default
+            </label>
+            <input type="number" id="node-input-defaultSetPoint" min="0" max="90" step="0.5" style="width: 60px">
+            <label>degrees</label>
+        </div>
+        <div class="form-row">
+            <label title="Heating tolerance around the set point. Heating or cooling will be disabled within this range to avoid overshooting the set point." for="node-input-tolerance">
+                <i class="fa fa-sliders"></i> Tolerance
+            </label>
+            <input type="number" id="node-input-tolerance" min="0" max="5" step="0.1" style="width: 60px">
+            <label>degrees</label>
+        </div>
+        <div class="form-row">
+            <label title="Minimum set point temperature" for="node-input-minTemp">
+                <i class="fa fa-minus-circle"></i> Min Temp
+            </label>
+            <input type="number" id="node-input-minTemp" min="-100" max="100" step="1" style="width: 60px">
+            <label>degrees</label>
+        </div>
+        <div class="form-row">
+            <label title="Maximum set point temperature" for="node-input-maxTemp">
+                <i class="fa fa-plus-circle"></i> Max Temp
+            </label>
+            <input type="number" id="node-input-maxTemp" min="-100" max="100" step="1" style="width: 60px">
+            <label>degrees</label>
+        </div>
+        <div class="form-row">
+            <label title="Duration for which the last temperature is valid.  Protects against cases where a thermostat fails with a lower reading and heating is stuck on.  If the time expires a safety cut off will remain active until a new temperature reading is received." for="node-input-tempValid">
+                <i class="fa fas fa-hourglass-half"></i> Temp Valid
+            </label>
+            <input type="number" id="node-input-tempValid" min="1" max="120" style="width: 60px">
+            <label>minute(s)</label>
+        </div>
+        <div class="form-row">
+            <label title="Minimum time to wait before switching from heating to cooling or vice versa.  Without this heating & cooling may compete against each other" for="node-input-swapDelay">
+                <i class="fa fa-random"></i> Swap Delay
+            </label>
+            <input type="number" id="node-input-swapDelay" min="1" max="120" style="width: 60px">
+            <label>minute(s)</label>
+        </div>
+    </div>
+    <h4>MQTT</h4>
+    <div class="form-row">
+        <label title="MQTT broker to use, uses the standard node red MQTT configuration node." for="node-input-broker">
+            <i class="fa fa-globe"></i> Broker
+        </label>
+        <input type="text" id="node-input-broker">
+    </div>
+    <div class="form-row">
+        <label title="Root topic to use. The climate controller id will be appended to this." for="node-input-topic">
+            <i class="fa fa-send"></i> Topic
+        </label>
+        <input type="text" id="node-input-topic" style="width: 70%">
+    </div>
+    <div class="form-row">
+        <label title="Advertise the climate controller via MQTT to any system that understands the home assistant protocol." for="node-input-advertise">
+            <i class="fa fa-rss"></i> Advertise
+        </label>
+        <input type="checkbox" id="node-input-advertise" style="width: 20px; margin: 0">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="thingzi-climate">
+    <p>thingZi climate control</p>
+
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt class="optional">payload <span class="property-type">string</span></dt>
+        <dd> Heating mode, either auto, heat, cool or off. Passing 'ON' will use the 'heat' mode.  Note that some inputs may not be accepted depending on the climate type.  e.g. if heating only, cool will not be accepted.</dd>
+        <dt class="optional">away <span class="property-type">string</span></dt>
+        <dd> Override switch to disable/enable the away mode. <code>ON</code> or <code>OFF</code></dd>
+        <dt class="optional">boost <span class="property-type">string</span></dt>
+        <dd> Heating boost mode, either auto, heat, cool or off. Remains active for boost duration. Passing 'ON' will use 'heat' mode.</dd>
+        <dt class="optional">setpoint <span class="property-type">string</span></dt>
+        <dd> Numeric value of target temperature.</dd>
+        <dt class="optional">temp <span class="property-type">string</span></dt>
+        <dd> Numeric value of current temperature, read this from a thermostat.</dd>
+    </dl>
+  
+    <h3>Outputs</h3>
+    <ol class="node-ports">
+        <li>Heating event
+            <dl class="message-properties">
+                <dt>heat <span class="property-type">string</span></dt>
+                <dd> Heating required (if enabled). <code>ON</code> or <code>OFF</code></dd>
+            </dl>
+            <dl class="message-properties">
+                <dt>cool <span class="property-type">string</span></dt>
+                <dd> Cooling required (if enabled). <code>ON</code> or <code>OFF</code></dd>
+            </dl>
+        </li>
+    </ol>
+
+    <h3>Details</h3>
+    <p>
+        Supports heating and cooling logic for zone based climate control systems. 
+        Centralise HVAC & hot water control to node red, removing the need for complex 
+        and expensive hardware controllers.  
+    </p>
+
+    <p>
+        MQTT integration with home assistant climate is also supported.
+    </p>
+
+</script>
