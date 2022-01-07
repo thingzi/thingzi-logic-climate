@@ -14,5 +14,9 @@
     "nodes": {
         "climate": "climate.js"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thingzi/thingzi-logic-climate.git"
   }
 }
