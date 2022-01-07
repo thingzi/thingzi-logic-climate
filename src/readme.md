@@ -20,6 +20,10 @@ Ive used this logic at home for years in conjunction with zwave thermostats, the
 
 <h2>Release Notes</h1>
 
+<b>0.3.7</b>
+
+- No code changes, updated package links for github
+
 <b>0.3.6</b>
 
 - Fix package dependencies for moment and is_utf8
