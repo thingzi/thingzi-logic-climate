@@ -18,9 +18,13 @@ Ive used this logic at home for years in conjunction with zwave thermostats, the
 
 <i>Disclaimer</i>. Please note that these nodes are virtual and you alone are responsible for ensuring the safety of any equipment you connect.
 
+If you like/use this node, coffee makes me happy and it keeps me coding when i should be sleeping...
+
+<a href="https://www.buymeacoffee.com/thingzi" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 50px !important;width: 200px !important;" ></a>
+
 <h2>Release Notes</h1>
 
-<b>0.3.9</b>
+<b>0.4.0</b>
 
 - Fix mqtt exception on reconnect
 - No code changes, updated package links for github
