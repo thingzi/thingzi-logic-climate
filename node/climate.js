@@ -122,7 +122,7 @@ module.exports = function(RED) {
                 climate.temperature_unit = node.degrees;
 
                 if (node.hasCooling && node.hasHeating) 
-                    climate.modes('auto');
+                    climate.modes.push('auto');
             }
 
             // Add climate modes
