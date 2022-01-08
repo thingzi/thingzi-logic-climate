@@ -90,10 +90,6 @@ module.exports = function(RED) {
 
         // On mqtt advertise
         this.onMqttConnect = function() {
-            if (!node.starting) {
-                node.publishValues();
-            }
-
             let device = {
                 identifiers: [ node.deviceId ],
                 name: `${node.name} Climate`,

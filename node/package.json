@@ -1,6 +1,6 @@
 {
   "name": "thingzi-logic-climate",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "description": "Climate control via node red",
   "bundleDependencies": false,
   "dependencies": {

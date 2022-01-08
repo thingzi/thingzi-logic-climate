@@ -20,6 +20,10 @@ Ive used this logic at home for years in conjunction with zwave thermostats, the
 
 <h2>Release Notes</h1>
 
+<b>0.3.8</b>
+
+- Fix mqtt exception on reconnect
+
 <b>0.3.7</b>
 
 - No code changes, updated package links for github
