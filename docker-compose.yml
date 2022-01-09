@@ -7,4 +7,4 @@ services:
     ports:
       - 1880:1880
     volumes:
-      - ./test:/data
+      - ./data:/data

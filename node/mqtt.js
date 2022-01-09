@@ -1,7 +1,6 @@
 // Advertise over mqtt
 module.exports = function(id, advertise, topic, broker, onadvertise, onset) {
     'use strict'
-    const isUtf8 = require('is-utf8');
     let adv = this;
 
     this.id = id;
@@ -31,7 +30,7 @@ module.exports = function(id, advertise, topic, broker, onadvertise, onset) {
         let len = parts.length  
 
         // Check that its a valid request
-        if (len >= 2 && parts[len-1] === 'set' && isUtf8(payload)) {
+        if (len >= 2 && parts[len-1] === 'set') {
             adv.onset(parts[len-2], payload.toString());
         }
     }

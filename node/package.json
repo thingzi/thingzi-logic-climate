@@ -4,8 +4,7 @@
   "description": "Climate control via node red",
   "bundleDependencies": false,
   "dependencies": {
-    "moment": "^2.22.1",
-    "is-utf8": "^0.2.1"
+    "moment": "^2.22.1"
   },
   "keywords": [ "node-red", "climate", "smart home", "temperature", "thermostat", "zone", "hot water", "heat", "cool", "hvac", "mqtt", "homeassistant", "hass" ],
   "author": "Bryan Black <bry@bryzi.net>",

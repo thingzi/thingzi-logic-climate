@@ -3,6 +3,9 @@ module.exports = function(RED) {
     const moment = require('moment');
     const mqtt = require('./mqtt');
 
+    const onValue = 'on';
+    const offValue = 'off';
+
     RED.nodes.registerType('thingzi-climate', function(config) {
         RED.nodes.createNode(this, config);
         var node = this;
@@ -39,7 +42,7 @@ module.exports = function(RED) {
         this.hasCooling = config.climateType === 'both' || config.climateType === 'cool' || config.climateType === 'manual';
         this.hasSetpoint = config.climateType !== 'manual';
 
-        // Default mode when 'ON' is used
+        // Default mode when on value is used
         this.defaultMode = 'heat';
         if (config.climateType === 'both') {
             this.defaultMode = 'auto';
@@ -106,7 +109,7 @@ module.exports = function(RED) {
                 away_mode_command_topic: `${node.topic}/away/set`,
                 mode_state_topic: `${node.topic}/mode`,
                 mode_command_topic: `${node.topic}/mode/set`,
-                modes: ['off'],
+                modes: [ offValue ],
                 device: device
             };
 
@@ -176,11 +179,11 @@ module.exports = function(RED) {
             let ac = s.pending ? node.lastAction : s.action
             let col = ac === 'heating' ?  'yellow' : ac === 'cooling' ? 'blue' : 'grey';
             let pre = s.pending ? '* ' : ''
-            let mode = s.boost !== 'off' ? s.boost + '*' : s.mode;
+            let mode = s.boost !== offValue ? s.mode + '*' : s.mode;
             let msg = { fill: col, shape:'dot' };
 
             if (node.hasSetpoint) {
-                let set = s.away === 'ON' ? 'away' : s.setpoint;
+                let set = isOn(s.away) ? 'away' : s.setpoint;
                 msg.text = `${pre}mode=${mode}, set=${set}, temp=${s.temp}`;
             } else {
                 msg.text = `${pre}mode=${mode}`;
@@ -194,9 +197,8 @@ module.exports = function(RED) {
 
         this.calcSetpointAction = function(s, now) {
             // Get Current Capability
-            let mode = s.boost !== 'off' ? s.boost : s.mode;
-            let canHeat = node.hasHeating && (mode === 'auto' || mode === 'heat');
-            let canCool = node.hasCooling && (mode === 'auto' || mode === 'cool');
+            let canHeat = node.hasHeating && (s.mode === 'auto' || s.mode === 'heat');
+            let canCool = node.hasCooling && (s.mode === 'auto' || s.mode === 'cool');
             
             // Use direction of temperature change to improve calculation and reduce ping pong effect
             let isTempRising = node.lastTemp ? s.temp - node.lastTemp > 0.01 : false;
@@ -218,7 +220,7 @@ module.exports = function(RED) {
                 }
             }
 
-            return 'off';
+            return offValue;
         }
 
         // Update the current action
@@ -236,7 +238,7 @@ module.exports = function(RED) {
             if (boostTime) {
                 let diff = now.diff(boostTime);
                 if (diff >= node.boostDurationMs) {
-                    node.boost.set('off');
+                    node.boost.set(offValue);
                 } else if (nextUpdate > 0) {
                     nextUpdate = Math.min(nextUpdate, node.boostDurationMs - diff);
                 }
@@ -250,10 +252,15 @@ module.exports = function(RED) {
                 temp: node.temp.get(),
                 tempTime: node.temp.time(),
                 away: node.away.get(),
-                action: 'off',
+                action: offValue,
                 changed: false,
                 pending: false
             };
+
+            // Update mode for boost (if not off, i.e. on|heat|cool|auto)
+            if (s.boost !== offValue) {
+                s.mode = s.boost;
+            }
 
             // Calculate action when setpoint is active
             if (node.hasSetpoint) {
@@ -266,16 +273,15 @@ module.exports = function(RED) {
                 s.action = node.calcSetpointAction(s, now);
             } else {
                 // Manual set (includes boost)
-                let mode = s.boost !== 'off' ? s.boost : s.mode;
-                if (mode === 'heat')  s.action = 'heating';
-                else if (mode ===  'cool') s.action = 'cooling';
+                if (s.mode === 'heat') s.action = 'heating';
+                else if (s.mode ===  'cool') s.action = 'cooling';
             }
 
             // Disable if away
-            if (s.away === 'ON') {
-                s.action = 'off';
-                s.boost = 'off';
-                node.boost.set('off');
+            if (isOn(s.away)) {
+                s.action = offValue;
+                s.boost = offValue;
+                node.boost.set(offValue);
             }
 
             // Must be a keep alive or change to send message
@@ -324,17 +330,27 @@ module.exports = function(RED) {
             }
         }
 
+        function isOn(v) {
+            return v === 'on' || v === '1' || v === 'true';
+        }
+
+        function isOff(v) {
+            return v === 'off' || v === '0' || v === 'false';
+        }
+
         // Away mode
         function awayStore() {
             this.get = function() { 
-                let p = node.getValue('away');
-                return p === 'ON' ? 'ON' : 'OFF';
+                let a = node.getValue('away');
+                return a === undefined ? offValue : a;
             };
             this.set = function(s) {
-                if (s) {
-                    s = s.toUpperCase();
-                    if (s === 'ON' || s === 'OFF') {
-                        node.setValue('away', s);
+                if (s !== undefined) {
+                    s = s.toString().toLowerCase();
+                    if (isOn(s)) {
+                        node.setValue('away', onValue);
+                    } else if (isOff(s)) {
+                        node.setValue('away', offValue);
                     }
                 }
             };
@@ -344,18 +360,18 @@ module.exports = function(RED) {
         function modeStore() {
             this.get = function() { 
                 let m = node.getValue('mode');
-                return m === undefined ? 'off' : m;
+                return m === undefined ? offValue : m;
             };
             this.set = function(s) {
-                if (s) {
-                    s = s.toLowerCase();
-                    if (s === 'on') {
+                if (s !== undefined) {
+                    s = s.toString().toLowerCase();
+                    if (isOn(s)) {
                         node.setValue('mode', node.defaultMode);
-                    } else if (s === 'auto' && node.hasSetpoint) {
-                        node.setValue('mode', 'auto');
-                    } else if ((s === 'heat' && node.hasHeating) || (s === 'cool' && node.hasCooling) || s === 'off') {
+                    } else if (isOff(s)) {
+                        node.setValue('mode', offValue);
+                    } else if ((s === 'auto' && node.hasSetpoint) || (s === 'heat' && node.hasHeating) || (s === 'cool' && node.hasCooling)) {
                         node.setValue('mode', s);
-                    }
+                    } 
                 }
             };
         };
@@ -364,27 +380,29 @@ module.exports = function(RED) {
         function boostStore() {
             this.get = function() { 
                 let b = node.getValue('boost');
-                return b === undefined ? 'off' : b;
+                return b === undefined ? offValue : b;
             };
             this.time = function() { 
                 let t = node.getValue('boostTime'); 
                 return t ? moment(t) : undefined;
             };
             this.set = function(s) {
-                s = s.toLowerCase();
-                let before = this.get();
+                if (s !== undefined) {
+                    s = s.toString().toLowerCase();
+                    let before = this.get();
 
-                if (s === 'on') {
-                    node.setValue('boost', 'on');
-                } else if (s === 'auto' && node.hasSetpoint) {
-                    node.setValue('boost', 'auto');
-                } else if ((s === 'heat' && node.hasHeating) || (s === 'cool' && node.hasCooling) || s === 'off') {
-                    node.setValue('boost', s);
-                }
-                
-                // Only set boost start time if there was a change
-                if (this.get() != before) {
-                    node.setValue('boostTime', s !== 'off' ? moment().valueOf() : undefined);
+                    if (isOn(s)) {
+                        node.setValue('boost', node.defaultMode);
+                    } else if (isOff(s)) {
+                        node.setValue('boost', offValue);
+                    } else if ((s === 'auto' && node.hasSetpoint) || (s === 'heat' && node.hasHeating) || (s === 'cool' && node.hasCooling)) {
+                        node.setValue('boost', s);
+                    } 
+                    
+                    // Only set boost start time if there was a change
+                    if (this.get() != before) {
+                        node.setValue('boostTime', s !== offValue ? moment().valueOf() : undefined);
+                    }
                 }
             };
         };
@@ -417,7 +435,7 @@ module.exports = function(RED) {
                 return t ? moment(t) : undefined;
             };
             this.set = function(s) {
-                if (s && node.hasSetpoint) { 
+                if (s !== undefined && node.hasSetpoint) { 
                     let t = parseFloat(s);
                     if (!isNaN(t)) {
                         node.setValue('temp', t);

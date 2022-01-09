@@ -209,12 +209,14 @@
 
     <h3>Inputs</h3>
     <dl class="message-properties">
-        <dt class="optional">payload <span class="property-type">string</span></dt>
-        <dd> Heating mode, either auto, heat, cool or off. Passing 'ON' will use the 'heat' mode.  Note that some inputs may not be accepted depending on the climate type.  e.g. if heating only, cool will not be accepted.</dd>
+        <dt class="optional">payload<span class="property-type">string</span></dt>
+        <dd> Heating mode, either auto, heat, cool or off. Passing <code>ON</code> will use the default mode depending on climate type.  Note that some inputs may not be accepted depending on the climate type.  e.g. if heating only, cool will not be accepted.</dd>
+        <dt class="optional">mode<span class="property-type">string</span></dt>
+        <dd> Same as payload above.</dd>
         <dt class="optional">away <span class="property-type">string</span></dt>
         <dd> Override switch to disable/enable the away mode. <code>ON</code> or <code>OFF</code></dd>
         <dt class="optional">boost <span class="property-type">string</span></dt>
-        <dd> Heating boost mode, either auto, heat, cool or off. Remains active for boost duration. Passing 'ON' will use 'heat' mode.</dd>
+        <dd> Heating boost mode, either auto, heat, cool or off. Remains active for boost duration. Passing <code>ON</code> will use the default mode depending on climate type.</dd>
         <dt class="optional">setpoint <span class="property-type">string</span></dt>
         <dd> Numeric value of target temperature.</dd>
         <dt class="optional">temp <span class="property-type">string</span></dt>

@@ -26,10 +26,16 @@ If you like/use this node, coffee makes me happy and it keeps me coding when i s
 
 <b>0.4.0</b>
 
+- Mode, boost & away now accept 1/0 or true/false, on/off in addition to ON/OFF
+- Improved boost behaviour when passing 'ON'.  Now defaults to boost default setting for the current configuration.  If you do not want his behaviour boost can still be passed an explicit mode name to boost instead
+- Code tidy to remove some repitition
+
+<b>0.3.9</b>
+
 - Fix mqtt exception on reconnect
 - No code changes, updated package links for github
-- Fix package dependencies for moment and is_utf8
-- Fix error when selected heat & cool with mqtt
+- Fix package dependencies for moment
+- Fix error when selecting heat & cool with mqtt
 
 <b>0.3.5</b>
 
