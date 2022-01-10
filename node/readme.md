@@ -22,7 +22,11 @@ If you like/use this node, coffee makes me happy and it keeps me coding when i s
 
 <a href="https://www.buymeacoffee.com/thingzi" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 50px !important;width: 200px !important;" ></a>
 
-<h2>Release Notes</h1>
+<h2>Release Notes</h2>
+
+<b>0.4.1</b>
+
+- Added the option to customise the heat and cool outputs should you need something other than ON/OFF
 
 <b>0.4.0</b>
 
@@ -33,9 +37,8 @@ If you like/use this node, coffee makes me happy and it keeps me coding when i s
 <b>0.3.9</b>
 
 - Fix mqtt exception on reconnect
-- No code changes, updated package links for github
 - Fix package dependencies for moment
-- Fix error when selecting heat & cool with mqtt
+- Fix error when selecting heat & cool climate type with mqtt enabled
 
 <b>0.3.5</b>
 

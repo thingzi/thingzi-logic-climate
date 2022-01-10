@@ -21,6 +21,12 @@
             tempValid: {value: 60, required:true},
             swapDelay: {value: 60, required:true},
 
+            // Outputs
+            onPayloadType: { value: 'str' },
+            onPayload: { value: 'ON', validate: RED.validators.typedInput("offPayloadType") },
+            offPayloadType: { value: 'str' },
+            offPayload: { value: 'OFF', validate: RED.validators.typedInput("offPayloadType") },
+
             // Advertise
             advertise: {value: false, required:true},
             broker: {type:'mqtt-broker', required:false},
@@ -79,6 +85,20 @@
             if (!$('#node-input-maxTemp').val()) {
                 $('#node-input-maxTemp').val('25')
             }
+
+            $("#node-input-onPayloadType").val(this.onPayloadType);
+            $("#node-input-onPayload").typedInput({
+                default: 'str',
+                typeField: $("#node-input-onPayloadType"),
+                types: ['str','num','bool','json']
+            });
+
+            $("#node-input-offPayloadType").val(this.offPayloadType);
+            $("#node-input-offPayload").typedInput({
+                default: 'str',
+                typeField: $("#node-input-offPayloadType"),
+                types: ['str','num','bool','json']
+            });
         },
         oneditsave: function () {
             this.outputs = $("#node-input-sendStatus").prop('checked') ? 3 : 2;
@@ -183,6 +203,17 @@
             <label>minute(s)</label>
         </div>
     </div>
+    <h4>Outputs</h4>
+    <div class="form-row">
+        <label for="node-input-onPayload"><i class="fa fa-envelope"></i> On Value</label>
+        <input type="text" id="node-input-onPayload" placeholder="ON">
+        <input type="hidden" id="node-input-onPayloadType">
+    </div>
+    <div class="form-row">
+        <label for="node-input-offPayload"><i class="fa fa-envelope"></i> Off Value</label>
+        <input type="text" id="node-input-offPayload" placeholder="OFF">
+        <input type="hidden" id="node-input-offPayloadType">
+    </div>
     <h4>MQTT</h4>
     <div class="form-row">
         <label title="MQTT broker to use, uses the standard node red MQTT configuration node." for="node-input-broker">
@@ -198,7 +229,7 @@
     </div>
     <div class="form-row">
         <label title="Advertise the climate controller via MQTT to any system that understands the home assistant protocol." for="node-input-advertise">
-            <i class="fa fa-rss"></i> Advertise
+            <i class="fa fa-rss"></i> HA Advertise
         </label>
         <input type="checkbox" id="node-input-advertise" style="width: 20px; margin: 0">
     </div>

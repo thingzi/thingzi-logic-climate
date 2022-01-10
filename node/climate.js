@@ -32,6 +32,12 @@ module.exports = function(RED) {
         this.tempValidMs = parseFloat(config.tempValid) * 1000 * 60; //< mins to ms
         this.swapDelayMs = parseFloat(config.swapDelay) * 1000 * 60; //< mins to ms
         
+        // Outputs
+        this.onPayload = config.onPayload;
+        this.onPayloadType = config.onPayloadType;
+        this.offPayload = config.offPayload;
+        this.offPayloadType = config.offPayloadType;
+
         // Advertising
         this.advertise = config.advertise;
         this.broker = RED.nodes.getNode(config.broker);
@@ -151,6 +157,32 @@ module.exports = function(RED) {
         this.getValue = function(id) {
             return node.context().get(id);
         }
+
+        // Get value in selected format
+        this.getOutput = function(isOn) {
+
+            let value = isOn ? node.onPayload : node.offPayload;
+            let type = isOn ? node.onPayloadType : node.offPayloadType;
+
+            if (value === undefined || value.length == 0 || type === undefined || type.length == 0) {
+                value = isOn ? 'ON' : 'OFF';
+                type = 'str';
+            }
+
+            switch (type) {
+                case 'json':
+                    value = JSON.parse(value);
+                    break;
+                case 'bool':
+                    value = (value === "true");
+                    break;
+                case 'num':
+                    value = parseFloat(value);
+                    break;
+            }
+
+            return value;
+        };
 
         // Set value for storage (mqtt)
         this.setValue = function(id, v) {
@@ -316,8 +348,8 @@ module.exports = function(RED) {
             // Send actions on keep alive or change
             if (isKeepAlive || s.changed) {
                 node.send([ 
-                    { payload: heating ? 'ON' : 'OFF' }, 
-                    { payload: cooling ? 'ON' : 'OFF' } 
+                    { payload: node.getOutput(heating) }, 
+                    { payload: node.getOutput(cooling) } 
                 ]);
             }
 
