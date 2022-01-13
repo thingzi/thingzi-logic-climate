@@ -185,9 +185,9 @@ module.exports = function(RED) {
         };
 
         // Set value for storage (mqtt)
-        this.setValue = function(id, v) {
+        this.setValue = function(id, v, mv) {
             node.context().set(id, v);
-            if (node.mqtt) node.mqtt.setValue(id, v);
+            if (node.mqtt) node.mqtt.setValue(id, mv || v);
         }
 
         // Clear update
@@ -380,9 +380,9 @@ module.exports = function(RED) {
                 if (s !== undefined) {
                     s = s.toString().toLowerCase();
                     if (isOn(s)) {
-                        node.setValue('away', onValue);
+                        node.setValue('away', onValue, onValue.toUpperCase());
                     } else if (isOff(s)) {
-                        node.setValue('away', offValue);
+                        node.setValue('away', offValue, offValue.toUpperCase());
                     }
                 }
             };

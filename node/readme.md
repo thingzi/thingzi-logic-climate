@@ -24,6 +24,10 @@ If you like/use this node, coffee makes me happy and it keeps me coding when i s
 
 <h2>Release Notes</h2>
 
+<b>0.4.2</b>
+
+- Fix away mode not working with homeassistant
+
 <b>0.4.1</b>
 
 - Added the option to customise the heat and cool outputs should you need something other than ON/OFF
