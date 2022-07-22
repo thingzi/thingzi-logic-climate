@@ -8,6 +8,7 @@ Note that scheduling is intentionally not part of the climate node to maximise r
 
 - Decides when to heat or cool based on current & target temperatures.
 - Multiple ways to configure e.g. heating only, cooling only, both heat & cool or manual control.
+- Override current program with "away" & "boost" presets.
 - Integration with MQTT and/or homeassistant.
 - Safety cut out when temperature readings are stale (when setpoint is active).
 - Configure minimum cycle time to protect equipment from rapid changes of state.
@@ -23,6 +24,11 @@ If you like/use this node, coffee makes me happy and it keeps me coding when i s
 <a href="https://www.buymeacoffee.com/thingzi" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 50px !important;width: 200px !important;" ></a>
 
 <h2>Release Notes</h2>
+
+<b>0.5.0</b>
+
+- Add support for homeassistant presets.  This supports the newer hass model with valid options of "boost", "away" or "off"
+  - This is also supported via mqtt for setting away and boost modes from home assistant
 
 <b>0.4.2</b>
 

@@ -3,8 +3,9 @@ module.exports = function(RED) {
     const moment = require('moment');
     const mqtt = require('./mqtt');
 
-    const onValue = 'on';
     const offValue = 'off';
+    const boostValue = 'boost';
+    const awayValue = 'away';
 
     RED.nodes.registerType('thingzi-climate', function(config) {
         RED.nodes.createNode(this, config);
@@ -21,7 +22,7 @@ module.exports = function(RED) {
         // Configuration
         this.keepAliveMs = parseFloat(config.keepAlive) * 1000 * 60; //< mins to ms
         this.cycleDelayMs = parseFloat(config.cycleDelay) * 1000; //< seconds to ms
-        this.boostDurationMs = parseFloat(config.boostDuration) * 1000 * 60; //< mins to ms
+        this.boostDurationMins = config.boostDuration;
 
         // Set Point
         this.degrees = config.degrees;
@@ -48,7 +49,7 @@ module.exports = function(RED) {
         this.hasCooling = config.climateType === 'both' || config.climateType === 'cool' || config.climateType === 'manual';
         this.hasSetpoint = config.climateType !== 'manual';
 
-        // Default mode when on value is used
+        // Default mode when on value or boost is used
         this.defaultMode = 'heat';
         if (config.climateType === 'both') {
             this.defaultMode = 'auto';
@@ -67,10 +68,13 @@ module.exports = function(RED) {
         this.on("input", function(msg, send, done) {
             if (msg.hasOwnProperty('payload')) { node.mode.set(msg.payload); }
             if (msg.hasOwnProperty('mode')) { node.mode.set(msg.mode); }
-            if (msg.hasOwnProperty('boost')) { node.boost.set(msg.boost); }
-            if (msg.hasOwnProperty('away')) { node.away.set(msg.away); }
+            if (msg.hasOwnProperty('preset')) { node.preset.set(msg.preset); }
             if (msg.hasOwnProperty('setpoint')) { node.setpoint.set(msg.setpoint); }
             if (msg.hasOwnProperty('temp')) { node.temp.set(msg.temp); }
+
+            // Backwards compatibility
+            if (msg.hasOwnProperty('boost')) { node.preset.set(isOn(msg.boost) ? boostValue : offValue); }
+            if (msg.hasOwnProperty('away')) { node.preset.set(isOn(msg.away) ? awayValue : offValue); }
 
             node.update();
             done();
@@ -90,8 +94,7 @@ module.exports = function(RED) {
         // On mqtt message
         this.onMqttSet = function (type, value) {
             if (type === 'mode') { node.mode.set(value); }
-            if (type === 'boost') { node.boost.set(value); }
-            if (type === 'away') { node.away.set(value); }
+            if (type === 'preset') { node.preset.set(value); }
             if (type === 'setpoint') { node.setpoint.set(value); }
 
             node.update();
@@ -111,10 +114,11 @@ module.exports = function(RED) {
                 name: node.name,
                 unique_id: node.deviceId,
                 action_topic: `${node.topic}/action`,
-                away_mode_state_topic: `${node.topic}/away`,
-                away_mode_command_topic: `${node.topic}/away/set`,
                 mode_state_topic: `${node.topic}/mode`,
                 mode_command_topic: `${node.topic}/mode/set`,
+                preset_mode_state_topic: `${node.topic}/preset`,
+                preset_mode_command_topic: `${node.topic}/preset/set`,
+                preset_modes: [ offValue, boostValue, awayValue ],
                 modes: [ offValue ],
                 device: device
             };
@@ -139,17 +143,7 @@ module.exports = function(RED) {
             if (node.hasCooling) climate.modes.push('cool');
 
             return [
-                { type: 'climate', payload: climate },
-                // { type: 'switch', payload: {
-                //     name: `${node.name} Boost`,
-                //     unique_id: `${node.deviceId}.boost`,
-                //     state_topic: `${node.topic}/boost`,
-                //     command_topic: `${node.topic}/boost/set`,
-                //     icon: 'mdi:rocket',
-                //     payload_on: 'ON',
-                //     payload_off: 'OFF',
-                //     device: device
-                // } },
+                { type: 'climate', payload: climate }
             ];
         }
 
@@ -211,11 +205,11 @@ module.exports = function(RED) {
             let ac = s.pending ? node.lastAction : s.action
             let col = ac === 'heating' ?  'yellow' : ac === 'cooling' ? 'blue' : 'grey';
             let pre = s.pending ? '* ' : ''
-            let mode = s.boost !== offValue ? s.mode + '*' : s.mode;
+            let mode = s.preset === boostValue ? s.mode + '*' : s.mode;
             let msg = { fill: col, shape:'dot' };
 
             if (node.hasSetpoint) {
-                let set = isOn(s.away) ? 'away' : s.setpoint;
+                let set = s.preset === awayValue ? 'away' : s.setpoint;
                 msg.text = `${pre}mode=${mode}, set=${set}, temp=${s.temp}`;
             } else {
                 msg.text = `${pre}mode=${mode}`;
@@ -264,34 +258,33 @@ module.exports = function(RED) {
             node.clearUpdateTimeout();
             let now = moment();
             let nextUpdate = node.keepAliveMs;
-            let boostTime = node.boost.time();
+            let presetExpiry = node.preset.expiry();
 
-            // Update boost
-            if (boostTime) {
-                let diff = now.diff(boostTime);
-                if (diff >= node.boostDurationMs) {
-                    node.boost.set(offValue);
+            // End of preset time ?
+            if (presetExpiry) {
+                let diff = now.diff(presetExpiry);
+                if (diff >= 0) {
+                    node.preset.set(offValue);
                 } else if (nextUpdate > 0) {
-                    nextUpdate = Math.min(nextUpdate, node.boostDurationMs - diff);
+                    nextUpdate = Math.min(nextUpdate, -diff);
                 }
             }
 
             // Current Status
             let s = {
                 mode: node.mode.get(),
-                boost: node.boost.get(),
+                preset: node.preset.get(),
                 setpoint: node.setpoint.get(),
                 temp: node.temp.get(),
                 tempTime: node.temp.time(),
-                away: node.away.get(),
                 action: offValue,
                 changed: false,
                 pending: false
             };
 
-            // Update mode for boost (if not off, i.e. on|heat|cool|auto)
-            if (s.boost !== offValue) {
-                s.mode = s.boost;
+            // Use default mode for boosting
+            if (s.preset === boostValue) {
+                s.mode = node.defaultMode;
             }
 
             // Calculate action when setpoint is active
@@ -304,16 +297,14 @@ module.exports = function(RED) {
 
                 s.action = node.calcSetpointAction(s, now);
             } else {
-                // Manual set (includes boost)
+                // Manual set
                 if (s.mode === 'heat') s.action = 'heating';
                 else if (s.mode ===  'cool') s.action = 'cooling';
             }
 
-            // Disable if away
-            if (isOn(s.away)) {
+            // Do nothing if away is active
+            if (s.preset === awayValue) {
                 s.action = offValue;
-                s.boost = offValue;
-                node.boost.set(offValue);
             }
 
             // Must be a keep alive or change to send message
@@ -363,34 +354,16 @@ module.exports = function(RED) {
         }
 
         function isOn(v) {
-            return v === 'on' || v === '1' || v === 'true';
+            return v === 'on' || v === 'ON' || v === '1' || v === 1 || v === 'true' || v === 'TRUE' || v === true;
         }
 
         function isOff(v) {
-            return v === 'off' || v === '0' || v === 'false';
+            return v === 'off' || v === 'OFF' || v === '0' || v === 0 || v === 'false' || v === 'FALSE' || v === false;
         }
-
-        // Away mode
-        function awayStore() {
-            this.get = function() { 
-                let a = node.getValue('away');
-                return a === undefined ? offValue : a;
-            };
-            this.set = function(s) {
-                if (s !== undefined) {
-                    s = s.toString().toLowerCase();
-                    if (isOn(s)) {
-                        node.setValue('away', onValue, onValue.toUpperCase());
-                    } else if (isOff(s)) {
-                        node.setValue('away', offValue, offValue.toUpperCase());
-                    }
-                }
-            };
-        };
 
         // Mode
         function modeStore() {
-            this.get = function() { 
+            this.get = function() {
                 let m = node.getValue('mode');
                 return m === undefined ? offValue : m;
             };
@@ -408,14 +381,14 @@ module.exports = function(RED) {
             };
         };
 
-        // Boost
-        function boostStore() {
+        // Preset
+        function presetStore() {
             this.get = function() { 
-                let b = node.getValue('boost');
+                let b = node.getValue('preset');
                 return b === undefined ? offValue : b;
             };
-            this.time = function() { 
-                let t = node.getValue('boostTime'); 
+            this.expiry = function() { 
+                let t = node.context().get('presetExpiry'); 
                 return t ? moment(t) : undefined;
             };
             this.set = function(s) {
@@ -423,17 +396,17 @@ module.exports = function(RED) {
                     s = s.toString().toLowerCase();
                     let before = this.get();
 
-                    if (isOn(s)) {
-                        node.setValue('boost', node.defaultMode);
-                    } else if (isOff(s)) {
-                        node.setValue('boost', offValue);
-                    } else if ((s === 'auto' && node.hasSetpoint) || (s === 'heat' && node.hasHeating) || (s === 'cool' && node.hasCooling)) {
-                        node.setValue('boost', s);
-                    } 
-                    
-                    // Only set boost start time if there was a change
-                    if (this.get() != before) {
-                        node.setValue('boostTime', s !== offValue ? moment().valueOf() : undefined);
+                    if (isOff(s)) {
+                        node.setValue('preset', offValue);
+                        node.setValue('presetExpiry', undefined);
+                    } else if (s === boostValue) {
+                        node.setValue('preset', boostValue);
+                        if (this.get() != before) {
+                            node.context().set('presetExpiry', moment().add(node.boostDurationMins,'minutes').valueOf());
+                        }
+                    } else if (s === awayValue) {
+                        node.setValue('preset', awayValue);
+                        node.setValue('presetExpiry', undefined);
                     }
                 }
             };
@@ -478,9 +451,8 @@ module.exports = function(RED) {
         };
 
         // Init Things
-        node.away = new awayStore();
         node.mode = new modeStore();
-        node.boost = new boostStore();
+        node.preset = new presetStore();
         node.setpoint = new setpointStore();
         node.temp = new tempStore();
 
@@ -497,8 +469,7 @@ module.exports = function(RED) {
             node.lastChange = null;
             if (node.mqtt) {
                 node.mqtt.setValue('mode', node.mode.get());
-                node.mqtt.setValue('boost', node.boost.get());
-                node.mqtt.setValue('away', node.away.get());
+                node.mqtt.setValue('preset', node.preset.get());
                 if (node.hasSetpoint) {
                     node.mqtt.setValue('setpoint', node.setpoint.get());
                     node.mqtt.setValue('temp', node.temp.get());
