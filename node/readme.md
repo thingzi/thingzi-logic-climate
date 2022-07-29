@@ -25,6 +25,14 @@ If you like/use this node, coffee makes me happy and it keeps me coding when i s
 
 <h2>Release Notes</h2>
 
+<b>0.5.2</b>
+
+- Change preset 'off' to 'none' to make it clearer this does nothing rather than imply climate 'off'
+
+<b>0.5.1</b>
+
+- Add boost to status output to restore backwards compatibility
+
 <b>0.5.0</b>
 
 - Add support for homeassistant presets.  This supports the newer hass model with valid options of "boost", "away" or "off"
