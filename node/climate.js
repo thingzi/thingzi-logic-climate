@@ -119,7 +119,7 @@ module.exports = function(RED) {
                 mode_command_topic: `${node.topic}/mode/set`,
                 preset_mode_state_topic: `${node.topic}/preset`,
                 preset_mode_command_topic: `${node.topic}/preset/set`,
-                preset_modes: [ noneValue, boostValue, awayValue ],
+                preset_modes: [ boostValue, awayValue ],
                 modes: [ offValue ],
                 device: device
             };
