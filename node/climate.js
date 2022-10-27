@@ -64,6 +64,7 @@ module.exports = function(RED) {
         this.lastTemp = null;
         this.lastHeatTime = null;
         this.lastCoolTime = null;
+        this.lastSendTime = null;
 
         // Handle direct inputs
         this.on("input", function(msg, send, done) {
@@ -258,8 +259,8 @@ module.exports = function(RED) {
 
             node.clearUpdateTimeout();
             let now = moment();
-            let nextUpdate = node.keepAliveMs;
             let presetExpiry = node.preset.expiry();
+            let nextUpdate = node.keepAliveMs;
 
             // End of preset time ?
             if (presetExpiry) {
@@ -342,6 +343,7 @@ module.exports = function(RED) {
 
             // Send actions on keep alive or change
             if (isKeepAlive || s.changed) {
+                node.lastSendTime = now;
                 node.send([ 
                     { payload: node.getOutput(heating) }, 
                     { payload: node.getOutput(cooling) } 
@@ -353,6 +355,11 @@ module.exports = function(RED) {
 
             // Make sure update is called every so often
             if (nextUpdate > 0) {
+                // Adjust next update based on last send time
+                if (node.lastSendTime) {
+                    let diff = now.diff(node.lastSendTime);
+                    nextUpdate = Math.max(nextUpdate - diff, 1);
+                }
                 node.updateTimeout = setTimeout(function() { node.update(true) }, nextUpdate);
             }
         }
