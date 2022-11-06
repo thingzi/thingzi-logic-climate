@@ -64,7 +64,6 @@ module.exports = function(RED) {
         this.lastTemp = null;
         this.lastHeatTime = null;
         this.lastCoolTime = null;
-        this.lastSendTime = null;
 
         // Handle direct inputs
         this.on("input", function(msg, send, done) {
@@ -204,13 +203,16 @@ module.exports = function(RED) {
 
         // Update the node status & send if needed
         this.updateStatus = function(s) {
+
             let ac = s.pending ? node.lastAction : s.action
-            let col = ac === 'heating' ?  'yellow' : ac === 'cooling' ? 'blue' : 'grey';
+            let col = ac === 'heating' ? 'yellow' : ac === 'cooling' ? 'blue' : 'grey';
             let pre = s.pending ? '* ' : ''
             let mode = s.preset === boostValue ? s.mode + '*' : s.mode;
             let msg = { fill: col, shape:'dot' };
 
-            if (node.hasSetpoint) {
+            if (s.action == 'idle') {
+                msg.text = 'waiting for temp...';
+            } else if (node.hasSetpoint) {
                 let set = s.preset === awayValue ? 'away' : s.setpoint;
                 msg.text = `${pre}mode=${mode}, set=${set}, temp=${s.temp}`;
             } else {
@@ -224,6 +226,12 @@ module.exports = function(RED) {
         }
 
         this.calcSetpointAction = function(s, now) {
+
+            // Waiting for input
+            if (!s.tempTime || now.diff(s.tempTime) >= node.tempValidMs) {
+                return 'idle';
+            }
+
             // Get Current Capability
             let canHeat = node.hasHeating && (s.mode === 'auto' || s.mode === 'heat');
             let canCool = node.hasCooling && (s.mode === 'auto' || s.mode === 'cool');
@@ -252,7 +260,7 @@ module.exports = function(RED) {
         }
 
         // Update the current action
-        this.update = function(isKeepAlive) {
+        this.update = function() {
             if (node.starting) {
                 return;
             }
@@ -260,15 +268,15 @@ module.exports = function(RED) {
             node.clearUpdateTimeout();
             let now = moment();
             let presetExpiry = node.preset.expiry();
-            let nextUpdate = node.keepAliveMs;
+            let nextInterval = node.keepAliveMs;
 
             // End of preset time ?
             if (presetExpiry) {
                 let diff = now.diff(presetExpiry);
                 if (diff >= 0) {
                     node.preset.set(noneValue);
-                } else if (nextUpdate > 0) {
-                    nextUpdate = Math.min(nextUpdate, -diff);
+                } else if (nextInterval > 0) {
+                    nextInterval = Math.min(nextInterval, -diff);
                 }
             }
 
@@ -294,12 +302,6 @@ module.exports = function(RED) {
 
             // Calculate action when setpoint is active
             if (node.hasSetpoint) {
-                // Make sure we have a temp value
-                if (!s.tempTime || now.diff(s.tempTime) >= node.tempValidMs) {
-                    node.setStatus({fill:'grey', shape:'dot', text:'waiting for temp...'});
-                    return;
-                }
-
                 s.action = node.calcSetpointAction(s, now);
             } else {
                 // Manual set
@@ -314,6 +316,14 @@ module.exports = function(RED) {
 
             // Must be a keep alive or change to send message
             s.changed = s.action != node.lastAction;
+
+            // Check if its time to keep alive
+            if (node.lastChange && node.keepAliveMs > 0) {
+                let diff = now.diff(node.lastChange);
+                if (diff >= node.keepAliveMs) {
+                    s.changed = true;
+                }
+            }
 
             // Heating / cooling states
             let heating = s.action === 'heating';
@@ -332,18 +342,14 @@ module.exports = function(RED) {
                 }
 
                 // Store states for future checks
-                node.lastChange = node.lastAction == null ? null : now;
+                node.lastChange = now;
                 node.lastAction = s.action;
                 node.setValue('action', s.action);
 
                 // Update last heat/cool time
                 if (heating || s.lastAction === 'heating') node.lastHeatTime = now;
                 if (cooling || s.lastAction === 'cooling') node.lastCoolTime = now;
-            }
 
-            // Send actions on keep alive or change
-            if (isKeepAlive || s.changed) {
-                node.lastSendTime = now;
                 node.send([ 
                     { payload: node.getOutput(heating) }, 
                     { payload: node.getOutput(cooling) } 
@@ -354,13 +360,16 @@ module.exports = function(RED) {
             node.updateStatus(s);
 
             // Make sure update is called every so often
-            if (nextUpdate > 0) {
-                // Adjust next update based on last send time
-                if (node.lastSendTime) {
-                    let diff = now.diff(node.lastSendTime);
-                    nextUpdate = Math.max(nextUpdate - diff, 1);
+            if (nextInterval > 0) {
+                // Adjust based on last change
+                if (node.lastChange) {
+                    let diff = now.diff(node.lastChange);
+                    nextInterval = Math.max(nextInterval - diff, 1);
                 }
-                node.updateTimeout = setTimeout(function() { node.update(true) }, nextUpdate);
+
+                nextInterval = Math.min(node.tempValidMs, nextInterval);
+                nextInterval = Math.max(1000, nextInterval);
+                node.updateTimeout = setTimeout(function() { node.update() }, nextInterval);
             }
         }
 
@@ -476,8 +485,7 @@ module.exports = function(RED) {
         node.setStatus({fill:'grey', shape:'dot', text:'starting...'});
         setTimeout(function() { 
             node.starting = false;
-            node.update(true);
-            node.lastChange = null;
+            node.update();
             if (node.mqtt) {
                 node.mqtt.setValue('mode', node.mode.get());
                 node.mqtt.setValue('preset', node.preset.get());
