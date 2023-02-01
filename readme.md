@@ -1,5 +1,7 @@
 Supports heating and cooling logic for zone based climate control systems. Centralise HVAC & hot water control to node red, removing the need for complex and expensive hardware controllers.  
 
+![example usage](images/usage.png)
+
 Create as many zones as needed and link to your own control panels via smart home system.  Obviously, you will still need switches and thermostats to physically control your systems but these can now be much simpler devices controlled via node red.
 
 Note that scheduling is intentionally not part of the climate node to maximise re-use.  Nodes such as <https://flows.nodered.org/node/thingzi-logic-timers> can be easily linked to inputs providing full management of schedules.  This supports the use case where one schedule controls many zones.
