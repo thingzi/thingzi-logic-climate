@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: thingzi-logic-climate
+  annotations:
+    github.com/project-slug: thingzi/thingzi-logic-climate
+spec:
+  type: other
+  lifecycle: unknown
+  owner: nodered
