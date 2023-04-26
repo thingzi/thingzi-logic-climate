@@ -11,5 +11,5 @@ metadata:
       icon: flowsheet
 spec:
   type: nodered
-  lifecycle: unknown
+  lifecycle: production
   owner: bryzi
