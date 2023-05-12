@@ -1,4 +1,4 @@
-# Select a method to advertise the node for use in smart home systems
+# Select smart home advertising protocol
 
 * Status: accepted
 * Deciders: Bryan
