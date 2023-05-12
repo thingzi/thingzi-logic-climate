@@ -4,7 +4,8 @@ metadata:
   name: thingzi-logic-climate
   description: Climate control logic for node red
   annotations:
-    github.com/project-slug: thingzi/thingzi-logic-climate  
+    github.com/project-slug: thingzi/thingzi-logic-climate
+    backstage.io/adr-location: docs/adr
   links:
     - url: https://flows.nodered.org/node/thingzi-logic-climate
       title: View in NodeRed flows
