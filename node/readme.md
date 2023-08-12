@@ -8,7 +8,7 @@ Note that scheduling is intentionally not part of the climate node to maximise r
 
 - Decides when to heat or cool based on current & target temperatures.
 - Multiple ways to configure e.g. heating only, cooling only, both heat & cool or manual control.
-- Override current program with "away" & "boost" presets.
+- Control current program with "away" & "boost" presets.
 - Integration with MQTT and/or homeassistant.
 - Safety cut out when temperature readings are stale (when setpoint is active).
 - Configure minimum cycle time to protect equipment from rapid changes of state.

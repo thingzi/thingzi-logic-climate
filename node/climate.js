@@ -4,7 +4,6 @@ module.exports = function(RED) {
     const mqtt = require('./mqtt');
 
     const offValue = 'off';
-    const noneValue = 'none';
     const boostValue = 'boost';
     const awayValue = 'away';
 
@@ -24,6 +23,9 @@ module.exports = function(RED) {
         this.keepAliveMs = parseFloat(config.keepAlive) * 1000 * 60; //< mins to ms
         this.cycleDelayMs = parseFloat(config.cycleDelay) * 1000; //< seconds to ms
         this.boostDurationMins = config.boostDuration;
+        this.defaultPreset = config.defaultPreset || 'none';
+
+        this.log('default preset = ' + this.defaultPreset);
 
         // Set Point
         this.degrees = config.degrees;
@@ -75,8 +77,8 @@ module.exports = function(RED) {
             if (msg.hasOwnProperty('temp')) { node.temp.set(msg.temp); }
 
             // Backwards compatibility
-            if (msg.hasOwnProperty('boost')) { node.preset.set(isOn(msg.boost) ? boostValue : noneValue); }
-            if (msg.hasOwnProperty('away')) { node.preset.set(isOn(msg.away) ? awayValue : noneValue); }
+            if (msg.hasOwnProperty('boost')) { node.preset.set(isOn(msg.boost) ? boostValue : node.defaultPreset); }
+            if (msg.hasOwnProperty('away')) { node.preset.set(isOn(msg.away) ? awayValue : node.defaultPreset); }
 
             node.update();
             done();
@@ -120,7 +122,7 @@ module.exports = function(RED) {
                 mode_command_topic: `${node.topic}/mode/set`,
                 preset_mode_state_topic: `${node.topic}/preset`,
                 preset_mode_command_topic: `${node.topic}/preset/set`,
-                preset_modes: [ boostValue, awayValue ],
+                preset_modes: [ node.defaultPreset, boostValue, awayValue ],
                 modes: [ offValue ],
                 device: device
             };
@@ -276,7 +278,7 @@ module.exports = function(RED) {
             if (presetExpiry) {
                 let diff = now.diff(presetExpiry);
                 if (diff >= 0) {
-                    node.preset.set(noneValue);
+                    node.preset.set(node.defaultPreset);
                 } else if (nextInterval > 0) {
                     nextInterval = Math.min(nextInterval, -diff);
                 }
@@ -412,7 +414,7 @@ module.exports = function(RED) {
         function presetStore() {
             this.get = function() { 
                 let b = node.getValue('preset');
-                return b === undefined ? noneValue : b;
+                return b === undefined ? node.defaultPreset : b;
             };
             this.expiry = function() { 
                 let t = node.context().get('presetExpiry'); 
@@ -423,8 +425,8 @@ module.exports = function(RED) {
                     s = s.toString().toLowerCase();
                     let before = this.get();
 
-                    if (s === noneValue || isOff(s)) {
-                        node.setValue('preset', noneValue);
+                    if (s === node.defaultPreset || isOff(s)) {
+                        node.setValue('preset', node.defaultPreset);
                         node.setValue('presetExpiry', undefined);
                     } else if (s === boostValue) {
                         node.setValue('preset', boostValue);

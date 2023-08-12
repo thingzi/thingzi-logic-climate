@@ -11,6 +11,7 @@
             keepAlive: {value: 15, required:true},
             cycleDelay: {value: 30, required:true},
             boostDuration: {value: 30, required:true},
+            defaultPreset: {value:'none', required:false},
 
             // Setpoint
             degrees: {value: 'C', required:true},
@@ -149,6 +150,12 @@
         </label>
         <input type="number" id="node-input-boostDuration" min="1" max="120" style="width: 60px">
         <label>minute(s)</label>
+    </div>
+    <div class="form-row">
+        <label title="Identifier to use for default preset, e.g. none, standard or default.  Allows more clarity for specific use cases. Default is 'none'">
+            <i class="fa fa-random"></i> Std Preset
+        </label>
+        <input type="text" id="node-input-defaultPreset" placeholder="none" style="width: 120px">
     </div>
 
     <div class="setpoint">
