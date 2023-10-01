@@ -12,7 +12,7 @@ module.exports = function(RED) {
         var node = this;
 
         // Internal State
-        this.name = config.name || this.id;
+        this.name = config.name ?? this.id;
         this.deviceId = config.name ? `${config.name.toLowerCase().trim().replace(/\s+/g, '-')}-climate` : `${this.id}-climate`;
         this.sendStatus = config.sendStatus;
         this.outputs = config.outputs;
@@ -23,7 +23,7 @@ module.exports = function(RED) {
         this.keepAliveMs = parseFloat(config.keepAlive) * 1000 * 60; //< mins to ms
         this.cycleDelayMs = parseFloat(config.cycleDelay) * 1000; //< seconds to ms
         this.boostDurationMins = config.boostDuration;
-        this.defaultPreset = config.defaultPreset || 'none';
+        this.defaultPreset = config.defaultPreset ?? 'none';
 
         this.log('default preset = ' + this.defaultPreset);
 

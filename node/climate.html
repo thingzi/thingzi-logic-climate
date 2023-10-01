@@ -40,7 +40,7 @@
         outputLabels: ["heating required","cooling required", "status"],
         icon: "climate.png",
         label: function () {
-            return this.name || "climate";
+            return this.name ?? "climate";
         },
         paletteLabel: "climate",
         oneditprepare: function() {
