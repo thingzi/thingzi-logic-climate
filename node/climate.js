@@ -23,9 +23,10 @@ module.exports = function(RED) {
         this.keepAliveMs = parseFloat(config.keepAlive) * 1000 * 60; //< mins to ms
         this.cycleDelayMs = parseFloat(config.cycleDelay) * 1000; //< seconds to ms
         this.boostDurationMins = config.boostDuration;
-        this.defaultPreset = config.defaultPreset ?? 'none';
-
-        this.log('default preset = ' + this.defaultPreset);
+        this.defaultPreset = config.defaultPreset;
+        if (!this.defaultPreset || this.defaultPreset.trim().length === 0) {
+            this.defaultPreset = 'none';
+        }
 
         // Set Point
         this.degrees = config.degrees;
@@ -43,14 +44,15 @@ module.exports = function(RED) {
         this.offPayloadType = config.offPayloadType;
 
         // Advertising
-        this.advertise = config.advertise;
+        this.advertiseType = config.advertiseType ?? (config.advertise === true ? 'hass' : 'none');
         this.broker = RED.nodes.getNode(config.broker);
-        this.topic = config.topic ? `${config.topic.toLowerCase().trim('/')}/${this.deviceId}` : null;
+        this.topic = `${config.topic.trim('/')}/${this.deviceId}`;
 
         // Capabilities
         this.hasHeating = config.climateType === 'both' || config.climateType === 'heat' || config.climateType === 'manual';
         this.hasCooling = config.climateType === 'both' || config.climateType === 'cool' || config.climateType === 'manual';
         this.hasSetpoint = config.climateType !== 'manual';
+        this.hasAutoMode = this.hasSetpoint && this.hasHeating && this.hasCooling;
 
         // Default mode when on value or boost is used
         this.defaultMode = 'heat';
@@ -104,16 +106,87 @@ module.exports = function(RED) {
             node.update();
         }
 
-        // On mqtt advertise
-        this.onMqttConnect = function() {
-            let device = {
-                identifiers: [ node.deviceId ],
-                name: `${node.name} Climate`,
-                model: 'thingZi Climate',
-                sw_version: '1.0',
-                manufacturer: 'thingZi'
+        // Get thingZi advertise confog
+        this.getThingziConfig = function() {
+            let name = `${node.name} Climate`;
+            let modes = [ offValue ];
+
+            // Add climate modes
+            if (node.hasAutoMode) modes.push('auto');
+            if (node.hasHeating) modes.push('heat');
+            if (node.hasCooling) modes.push('cool');
+
+            let climate = {
+                thing: {
+                    id: node.deviceId,
+                    type: 'climate',
+                    name: `${node.name} Climate`,
+                    device_model: 'thingZi Climate',
+                    version: '1.0'
+                },
+                properties: [
+                    { 
+                        id: 'mode',
+                        type: 'text',
+                        name: `${name} Mode`,
+                        metrics: true,
+                        state_topic: `${node.topic}/mode`,
+                        cmd_topic: `${node.topic}/mode/set`,
+                        valid_states: modes
+                    },
+                    { 
+                        id: 'program',
+                        type: 'text',
+                        name: `${name} Program`,
+                        metrics: true,
+                        state_topic: `${node.topic}/preset`,
+                        cmd_topic: `${node.topic}/preset/set`,
+                        valid_states: [ node.defaultPreset, boostValue, awayValue ]
+                    },
+                    { 
+                        id: 'status',
+                        type: 'text',
+                        name: `${name} Status`,
+                        metrics: true,
+                        state_topic: `${node.topic}/action`
+                    },
+                ]
             };
 
+            // Add setpoint config
+            if (node.hasSetpoint) {
+                climate.properties.push({
+                    id: 'setpoint',
+                    type: 'number',
+                    name: `${name} Setpoint`,
+                    unit: node.degrees,
+                    metrics: true,
+                    state_topic: `${node.topic}/setpoint`,
+                    cmd_topic: `${node.topic}/setpoint/set`,
+                    valid_states: [ `${node.minTemp}->${node.maxTemp}` ],
+                    config: [
+                        {
+                            key: 'step',
+                            value: node.degrees === 'C' ? 0.5 : 1
+                        }
+                    ]
+                });
+
+                climate.properties.push({
+                    id: 'temp',
+                    type: 'number',
+                    name: `${name} Temp`,
+                    unit: node.degrees,
+                    metrics: true,
+                    state_topic: `${node.topic}/temp`
+                });
+            }
+
+            return climate;
+        }
+
+        // Get HASS advertise confog
+        this.getHassConfig = function() {
             let climate = {
                 name: node.name,
                 unique_id: node.deviceId,
@@ -124,7 +197,13 @@ module.exports = function(RED) {
                 preset_mode_command_topic: `${node.topic}/preset/set`,
                 preset_modes: [ node.defaultPreset, boostValue, awayValue ],
                 modes: [ offValue ],
-                device: device
+                device: {
+                    identifiers: [ node.deviceId ],
+                    name: `${node.name} Climate`,
+                    model: 'thingZi Climate',
+                    sw_version: '1.0',
+                    manufacturer: 'thingZi'
+                }
             };
 
             // Add setpoint config
@@ -137,18 +216,14 @@ module.exports = function(RED) {
                 climate.min_temp = node.minTemp;
                 climate.temp_step = node.degrees === 'C' ? 0.5 : 1;
                 climate.temperature_unit = node.degrees;
-
-                if (node.hasCooling && node.hasHeating) 
-                    climate.modes.push('auto');
             }
 
             // Add climate modes
-            if (node.hasHeating) climate.modes.push('heat');
-            if (node.hasCooling) climate.modes.push('cool');
+            if (node.hasAutoMode) climate.modes.push('auto');
+            if (node.hasHeating)  climate.modes.push('heat');
+            if (node.hasCooling)  climate.modes.push('cool');
 
-            return [
-                { type: 'climate', payload: climate }
-            ];
+            return climate;
         }
 
         // Get value from storage
@@ -394,6 +469,9 @@ module.exports = function(RED) {
         function modeStore() {
             this.get = function() {
                 let m = node.getValue('mode');
+                if (m === 'auto' && !node.hasAutoMode) {
+                    m = node.defaultMode;
+                }
                 return m === undefined ? offValue : m;
             };
             this.set = function(s) {
@@ -403,7 +481,7 @@ module.exports = function(RED) {
                         node.setValue('mode', node.defaultMode);
                     } else if (isOff(s)) {
                         node.setValue('mode', offValue);
-                    } else if ((s === 'auto' && node.hasSetpoint) || (s === 'heat' && node.hasHeating) || (s === 'cool' && node.hasCooling)) {
+                    } else if ((s === 'auto' && node.hasAutoMode) || (s === 'heat' && node.hasHeating) || (s === 'cool' && node.hasCooling)) {
                         node.setValue('mode', s);
                     } 
                 }
@@ -487,7 +565,19 @@ module.exports = function(RED) {
 
         // If a broker is specified we create an mqtt handler
         if (node.broker && node.topic) {
-            node.mqtt = new mqtt(node.deviceId, node.advertise, node.topic, node.broker, node.onMqttConnect, node.onMqttSet);
+            switch (node.advertiseType) {
+                case 'none':
+                    node.mqtt = new mqtt(node.deviceId, node.topic, node.broker, node.onMqttSet);
+                    break;
+                case 'thingzi':
+                    let tztopic = `discovery/nodered/${node.deviceId}/config`;
+                    node.mqtt = new mqtt(node.deviceId, node.topic, node.broker, node.onMqttSet, tztopic, node.getThingziConfig());
+                    break;
+                case 'hass':
+                    let hatopic = `homeassistant/climate/${node.deviceId}/climate/config`;
+                    node.mqtt = new mqtt(node.deviceId, node.topic, node.broker, node.onMqttSet, hatopic, node.getHassConfig());
+                    break;
+            }
         }
 
         // Initial update

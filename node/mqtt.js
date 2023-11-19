@@ -1,16 +1,14 @@
 // Advertise over mqtt
-module.exports = function(id, advertise, topic, broker, onadvertise, onset) {
+module.exports = function(id, topic, broker, onset, advtopic, advconfig) {
     'use strict'
     let adv = this;
 
     this.id = id;
-    this.advertise = advertise;
     this.topic = topic;
     this.broker = broker;
-    this.onadvertise = onadvertise;
     this.onset = onset;
-
-    this.root = 'homeassistant';
+    this.advtopic = advtopic;
+    this.advconfig = advconfig;
     this.connected = false;
     this.started = true;
     this.queued = {};
@@ -40,17 +38,9 @@ module.exports = function(id, advertise, topic, broker, onadvertise, onset) {
         var con = adv.broker.connected;
         if (con != adv.connected) {
             if (con) {
-                // HASS advertising
-                let entities = adv.onadvertise();
-                if (entities) {
-                    for (const entity of entities) {
-                        adv.broker.publish({ 
-                            topic:`${adv.root}/${entity.type}/${adv.id}/${entity.type}/config`,
-                            payload: adv.advertise ? entity.payload : '',
-                            retain: true,
-                            qos: 1
-                        });
-                    }
+                // Advertise if set
+                if (adv.advtopic && adv.advconfig) {
+                    adv.broker.publish({ topic: adv.advtopic, payload: adv.advconfig, retain: true, qos: 1 });
                 }
 
                 // Queued items

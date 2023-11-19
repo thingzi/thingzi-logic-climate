@@ -29,9 +29,11 @@
             offPayload: { value: 'OFF', validate: RED.validators.typedInput("offPayloadType") },
 
             // Advertise
-            advertise: {value: false, required:true},
+            advertiseType: {value: 'none', required:true},
+            advertise: {}, // old HASS setting
             broker: {type:'mqtt-broker', required:false},
             topic: {value:'thingzi', required:false},
+
             outputs: {value: 2}
         },
         inputs: 1,
@@ -45,7 +47,6 @@
         paletteLabel: "climate",
         oneditprepare: function() {
             $('#node-input-sendStatus').prop("checked", this.sendStatus);
-            $('#node-input-advertise').prop("checked", this.advertise);
 
             // Show hide setpoint based on type
             $('#node-input-climateType').on('change', function(data) {
@@ -100,6 +101,15 @@
                 typeField: $("#node-input-offPayloadType"),
                 types: ['str','num','bool','json']
             });
+
+            // Backwards compatibility
+            if (!$('#node-input-advertiseType').val()) {
+                if (this.advertise === true) {
+                    $('#node-input-advertiseType').val('hass');
+                } else {
+                    $('#node-input-advertiseType').val('none');
+                }
+            }
         },
         oneditsave: function () {
             this.outputs = $("#node-input-sendStatus").prop('checked') ? 3 : 2;
@@ -230,15 +240,17 @@
     </div>
     <div class="form-row">
         <label title="Root topic to use. The climate controller id will be appended to this." for="node-input-topic">
-            <i class="fa fa-send"></i> Topic
+            <i class="fa fa-send"></i> Root Topic
         </label>
         <input type="text" id="node-input-topic" style="width: 70%">
     </div>
     <div class="form-row">
-        <label title="Advertise the climate controller via MQTT to any system that understands the home assistant protocol." for="node-input-advertise">
-            <i class="fa fa-rss"></i> HA Advertise
-        </label>
-        <input type="checkbox" id="node-input-advertise" style="width: 20px; margin: 0">
+        <label title="Type to use for MQTT advertisements" for="node-input-advertiseType"><i class="fa fa-rss"></i> Advertise</label>
+        <select id="node-input-advertiseType" style="width: 200px">
+            <option value="none">None</option>
+            <option value="thingzi">thingZi</option>
+            <option value="hass">Home Assistant</option>
+        </select>
     </div>
 </script>
 
@@ -283,7 +295,7 @@
     </p>
 
     <p>
-        MQTT integration with home assistant climate is also supported.
+        MQTT integration with advertising via home assistant or thingzi is also supported.
     </p>
 
 </script>
