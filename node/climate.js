@@ -12,7 +12,7 @@ module.exports = function(RED) {
         var node = this;
 
         // Internal State
-        this.name = config.name ?? this.id;
+        this.name = config.name || this.id;
         this.deviceId = config.name ? `${config.name.toLowerCase().trim().replace(/\s+/g, '-')}-climate` : `${this.id}-climate`;
         this.sendStatus = config.sendStatus;
         this.outputs = config.outputs;
