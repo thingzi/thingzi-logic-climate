@@ -144,9 +144,9 @@ module.exports = function(RED) {
                         valid_states: [ node.defaultPreset, boostValue, awayValue ]
                     },
                     { 
-                        id: 'status',
+                        id: 'action',
                         type: 'text',
-                        name: `${name} Status`,
+                        name: `${name} Action`,
                         metrics: true,
                         state_topic: `${node.topic}/action`
                     },
