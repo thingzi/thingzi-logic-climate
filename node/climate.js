@@ -434,6 +434,7 @@ module.exports = function(RED) {
             // Send a message
             if (s.changed || s.keepAlive) {
                 node.lastSend = now;
+                node.setValue('action', s.action);
                 node.send([ 
                     { payload: node.getOutput(heating) }, 
                     { payload: node.getOutput(cooling) } 
