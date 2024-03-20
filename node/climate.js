@@ -77,6 +77,7 @@ module.exports = function(RED) {
             if (msg.hasOwnProperty('preset')) { node.preset.set(msg.preset); }
             if (msg.hasOwnProperty('setpoint')) { node.setpoint.set(msg.setpoint); }
             if (msg.hasOwnProperty('temp')) { node.temp.set(msg.temp); }
+            if (msg.hasOwnProperty('tolerance')) { this.tolerance = parseFloat(msg.tolerance); }
 
             // Backwards compatibility
             if (msg.hasOwnProperty('boost')) { node.preset.set(isOn(msg.boost) ? boostValue : node.defaultPreset); }
@@ -366,6 +367,7 @@ module.exports = function(RED) {
                 setpoint: node.setpoint.get(),
                 temp: node.temp.get(),
                 tempTime: node.temp.time(),
+                tolerance: this.tolerance,
                 action: offValue,
                 changed: false,
                 pending: false,
