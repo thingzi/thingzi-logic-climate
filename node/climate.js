@@ -4,8 +4,23 @@ module.exports = function(RED) {
     const mqtt = require('./mqtt');
 
     const offValue = 'off';
-    const boostValue = 'boost';
-    const awayValue = 'away';
+
+    const presetBoost = 'boost';
+    const presetAway = 'away';
+    const presetNone = 'none';
+
+    const modeAuto = 'auto';
+    const modeHeat = 'heat';
+    const modeCool = 'cool';
+
+    const climateBoth = 'both';
+    const climateHeat = 'heat';
+    const climateCool = 'cool';
+    const climateManual = 'manual';
+
+    const advNone = 'none';
+    const advHass = 'hass';
+    const advThingzi = 'thingzi';
 
     RED.nodes.registerType('thingzi-climate', function(config) {
         RED.nodes.createNode(this, config);
@@ -25,7 +40,7 @@ module.exports = function(RED) {
         this.boostDurationMins = config.boostDuration;
         this.defaultPreset = config.defaultPreset;
         if (!this.defaultPreset || this.defaultPreset.trim().length === 0) {
-            this.defaultPreset = 'none';
+            this.defaultPreset = presetNone;
         }
 
         // Set Point
@@ -44,22 +59,22 @@ module.exports = function(RED) {
         this.offPayloadType = config.offPayloadType;
 
         // Advertising
-        this.advertiseType = config.advertiseType ?? (config.advertise === true ? 'hass' : 'none');
+        this.advertiseType = config.advertiseType ?? (config.advertise === true ? advHass : advNone);
         this.broker = RED.nodes.getNode(config.broker);
         this.topic = `${config.topic.trim('/')}/${this.deviceId}`;
 
         // Capabilities
-        this.hasHeating = config.climateType === 'both' || config.climateType === 'heat' || config.climateType === 'manual';
-        this.hasCooling = config.climateType === 'both' || config.climateType === 'cool' || config.climateType === 'manual';
-        this.hasSetpoint = config.climateType !== 'manual';
+        this.hasHeating = config.climateType === climateBoth || config.climateType === climateHeat || config.climateType === climateManual
+        this.hasCooling = config.climateType === climateBoth || config.climateType === climateCool || config.climateType === climateManual;
+        this.hasSetpoint = config.climateType !== climateManual;
         this.hasAutoMode = this.hasSetpoint && this.hasHeating && this.hasCooling;
 
         // Default mode when on value or boost is used
-        this.defaultMode = 'heat';
-        if (config.climateType === 'both') {
-            this.defaultMode = 'auto';
-        } else if (config.climateType === 'cool') {
-            this.defaultMode = 'cool';
+        this.defaultMode = modeHeat;
+        if (config.climateType === climateBoth) {
+            this.defaultMode = modeAuto;
+        } else if (config.climateType === climateCool) {
+            this.defaultMode = modeCool;
         }
 
         // Previous state
@@ -80,8 +95,8 @@ module.exports = function(RED) {
             if (msg.hasOwnProperty('tolerance')) { this.tolerance = parseFloat(msg.tolerance); }
 
             // Backwards compatibility
-            if (msg.hasOwnProperty('boost')) { node.preset.set(isOn(msg.boost) ? boostValue : node.defaultPreset); }
-            if (msg.hasOwnProperty('away')) { node.preset.set(isOn(msg.away) ? awayValue : node.defaultPreset); }
+            if (msg.hasOwnProperty('boost')) { node.preset.set(isOn(msg.boost) ? presetBoost : node.defaultPreset); }
+            if (msg.hasOwnProperty('away')) { node.preset.set(isOn(msg.away) ? presetAway : node.defaultPreset); }
 
             node.update();
             done();
@@ -113,9 +128,9 @@ module.exports = function(RED) {
             let modes = [ offValue ];
 
             // Add climate modes
-            if (node.hasAutoMode) modes.push('auto');
-            if (node.hasHeating) modes.push('heat');
-            if (node.hasCooling) modes.push('cool');
+            if (node.hasAutoMode) modes.push(modeAuto);
+            if (node.hasHeating) modes.push(modeHeat);
+            if (node.hasCooling) modes.push(modeCool);
 
             let climate = {
                 thing: {
@@ -142,7 +157,7 @@ module.exports = function(RED) {
                         metrics: true,
                         state_topic: `${node.topic}/preset`,
                         cmd_topic: `${node.topic}/preset/set`,
-                        valid_states: [ node.defaultPreset, boostValue, awayValue ]
+                        valid_states: [ node.defaultPreset, presetBoost, presetAway ]
                     },
                     { 
                         id: 'action',
@@ -196,7 +211,7 @@ module.exports = function(RED) {
                 mode_command_topic: `${node.topic}/mode/set`,
                 preset_mode_state_topic: `${node.topic}/preset`,
                 preset_mode_command_topic: `${node.topic}/preset/set`,
-                preset_modes: [ node.defaultPreset, boostValue, awayValue ],
+                preset_modes: [ presetBoost, presetAway ],
                 modes: [ offValue ],
                 device: {
                     identifiers: [ node.deviceId ],
@@ -206,6 +221,10 @@ module.exports = function(RED) {
                     manufacturer: 'thingZi'
                 }
             };
+
+            if (node.defaultPreset !== presetNone) {
+                climate.preset_modes.unshift(node.defaultPreset)
+            }
 
             // Add setpoint config
             if (node.hasSetpoint) {
@@ -220,9 +239,9 @@ module.exports = function(RED) {
             }
 
             // Add climate modes
-            if (node.hasAutoMode) climate.modes.push('auto');
-            if (node.hasHeating)  climate.modes.push('heat');
-            if (node.hasCooling)  climate.modes.push('cool');
+            if (node.hasAutoMode) climate.modes.push(modeAuto);
+            if (node.hasHeating)  climate.modes.push(modeHeat);
+            if (node.hasCooling)  climate.modes.push(modeCool);
 
             return climate;
         }
@@ -286,13 +305,13 @@ module.exports = function(RED) {
             let ac = s.pending ? node.lastAction : s.action
             let col = ac === 'heating' ? 'yellow' : ac === 'cooling' ? 'blue' : 'grey';
             let pre = s.pending ? '* ' : ''
-            let mode = s.preset === boostValue ? s.mode + '*' : s.mode;
+            let mode = s.preset === presetBoost ? s.mode + '*' : s.mode;
             let msg = { fill: col, shape:'dot' };
 
             if (s.action == 'idle') {
                 msg.text = `${pre}waiting for temp...`;
             } else if (node.hasSetpoint) {
-                let set = s.preset === awayValue ? 'away' : s.setpoint;
+                let set = s.preset === presetAway ? 'away' : s.setpoint;
                 msg.text = `${pre}mode=${mode}, set=${set}, temp=${s.temp}`;
             } else {
                 msg.text = `${pre}mode=${mode}`;
@@ -312,8 +331,8 @@ module.exports = function(RED) {
             }
 
             // Get Current Capability
-            let canHeat = node.hasHeating && (s.mode === 'auto' || s.mode === 'heat');
-            let canCool = node.hasCooling && (s.mode === 'auto' || s.mode === 'cool');
+            let canHeat = node.hasHeating && (s.mode === modeAuto || s.mode === modeHeat);
+            let canCool = node.hasCooling && (s.mode === modeAuto || s.mode === modeCool);
             
             // Use direction of temperature change to improve calculation and reduce ping pong effect
             let isTempRising = node.lastTemp ? s.temp - node.lastTemp > 0.01 : false;
@@ -375,24 +394,24 @@ module.exports = function(RED) {
             };
 
             // Use default mode for boosting
-            if (s.preset === boostValue) {
+            if (s.preset === presetBoost) {
                 s.mode = node.defaultMode;
             }
 
             // Backwards compatibility
-            s.boost = node.preset.get() === boostValue ? s.mode : offValue;
+            s.boost = node.preset.get() === presetBoost ? s.mode : offValue;
 
             // Calculate action when setpoint is active
             if (node.hasSetpoint) {
                 s.action = node.calcSetpointAction(s, now);
             } else {
                 // Manual set
-                if (s.mode === 'heat') s.action = 'heating';
-                else if (s.mode ===  'cool') s.action = 'cooling';
+                if (s.mode === modeHeat) s.action = 'heating';
+                else if (s.mode ===  modeCool) s.action = 'cooling';
             }
 
             // Do nothing if away is active
-            if (s.preset === awayValue) {
+            if (s.preset === presetAway) {
                 s.action = offValue;
             }
 
@@ -472,7 +491,7 @@ module.exports = function(RED) {
         function modeStore() {
             this.get = function() {
                 let m = node.getValue('mode');
-                if (m === 'auto' && !node.hasAutoMode) {
+                if (m === modeAuto && !node.hasAutoMode) {
                     m = node.defaultMode;
                 }
                 return m === undefined ? offValue : m;
@@ -484,7 +503,7 @@ module.exports = function(RED) {
                         node.setValue('mode', node.defaultMode);
                     } else if (isOff(s)) {
                         node.setValue('mode', offValue);
-                    } else if ((s === 'auto' && node.hasAutoMode) || (s === 'heat' && node.hasHeating) || (s === 'cool' && node.hasCooling)) {
+                    } else if ((s === modeAuto && node.hasAutoMode) || (s === modeHeat && node.hasHeating) || (s === modeCool && node.hasCooling)) {
                         node.setValue('mode', s);
                     } 
                 }
@@ -509,13 +528,13 @@ module.exports = function(RED) {
                     if (s === node.defaultPreset || isOff(s)) {
                         node.setValue('preset', node.defaultPreset);
                         node.setValue('presetExpiry', undefined);
-                    } else if (s === boostValue) {
-                        node.setValue('preset', boostValue);
+                    } else if (s === presetBoost) {
+                        node.setValue('preset', presetBoost);
                         if (this.get() != before) {
                             node.context().set('presetExpiry', moment().add(node.boostDurationMins,'minutes').valueOf());
                         }
-                    } else if (s === awayValue) {
-                        node.setValue('preset', awayValue);
+                    } else if (s === presetAway) {
+                        node.setValue('preset', presetAway);
                         node.setValue('presetExpiry', undefined);
                     }
                 }
@@ -569,14 +588,14 @@ module.exports = function(RED) {
         // If a broker is specified we create an mqtt handler
         if (node.broker && node.topic) {
             switch (node.advertiseType) {
-                case 'none':
+                case advNone:
                     node.mqtt = new mqtt(node.deviceId, node.topic, node.broker, node.onMqttSet);
                     break;
-                case 'thingzi':
+                case advThingzi:
                     let tztopic = `discovery/nodered/${node.deviceId}/config`;
                     node.mqtt = new mqtt(node.deviceId, node.topic, node.broker, node.onMqttSet, tztopic, node.getThingziConfig());
                     break;
-                case 'hass':
+                case advHass:
                     let hatopic = `homeassistant/climate/${node.deviceId}/climate/config`;
                     node.mqtt = new mqtt(node.deviceId, node.topic, node.broker, node.onMqttSet, hatopic, node.getHassConfig());
                     break;
