@@ -113,13 +113,24 @@ module.exports = function(RED) {
             }
         });
 
-        // On mqtt message
+        this.onMqttConnect = function () {
+            node.update();
+        }
+
         this.onMqttSet = function (type, value) {
             if (type === 'mode') { node.mode.set(value); }
             if (type === 'preset') { node.preset.set(value); }
             if (type === 'setpoint') { node.setpoint.set(value); }
 
             node.update();
+        }
+
+        this.onMqttInfo = function (text) {
+            node.log(text);
+        }
+
+        this.onMqttWarn = function (text) {
+            node.warn(text);
         }
 
         // Get thingZi advertise confog
@@ -310,13 +321,18 @@ module.exports = function(RED) {
 
             if (s.action == 'idle') {
                 msg.text = `${pre}waiting for temp...`;
-            } else if (node.hasSetpoint) {
-                let set = s.preset === presetAway ? 'away' : s.setpoint;
-                msg.text = `${pre}mode=${mode}, set=${set}, temp=${s.temp}`;
             } else {
-                msg.text = `${pre}mode=${mode}`;
+                if (node.hasSetpoint) {
+                    let set = s.preset === presetAway ? 'away' : s.setpoint;
+                    msg.text = `${pre}mode=${mode}, set=${set}, temp=${s.temp}`;
+                } else {
+                    msg.text = `${pre}mode=${mode}`;
+                }
+                if (node.broker && !node.broker.connected) {
+                    msg.text += ', mqtt=offline'
+                }
             }
-            
+
             node.status(msg);
             if (node.sendStatus) {
                 node.send([ null, null, { payload: msg, status: s }]);
@@ -491,10 +507,7 @@ module.exports = function(RED) {
         function modeStore() {
             this.get = function() {
                 let m = node.getValue('mode');
-                if (m === modeAuto && !node.hasAutoMode) {
-                    m = node.defaultMode;
-                }
-                return m === undefined ? offValue : m;
+                return m === undefined || !this.valid(m) ? offValue : m;
             };
             this.set = function(s) {
                 if (s !== undefined) {
@@ -503,17 +516,24 @@ module.exports = function(RED) {
                         node.setValue('mode', node.defaultMode);
                     } else if (isOff(s)) {
                         node.setValue('mode', offValue);
-                    } else if ((s === modeAuto && node.hasAutoMode) || (s === modeHeat && node.hasHeating) || (s === modeCool && node.hasCooling)) {
+                    } else if (this.valid(s)) {
                         node.setValue('mode', s);
                     } 
                 }
             };
+            this.valid = function name(v) {
+                return v === offValue || (v === modeAuto && node.hasAutoMode) || 
+                    (v === modeCool && node.hasCooling) || (v === modeHeat && node.hasHeating);
+            }
         };
 
         // Preset
         function presetStore() {
             this.get = function() { 
                 let b = node.getValue('preset');
+                if (b !== node.defaultPreset && b !== presetBoost && b !== presetAway && b !== presetNone) {
+                    return node.defaultPreset;
+                }
                 return b === undefined ? node.defaultPreset : b;
             };
             this.expiry = function() { 
@@ -524,7 +544,6 @@ module.exports = function(RED) {
                 if (s !== undefined) {
                     s = s.toString().toLowerCase();
                     let before = this.get();
-
                     if (s === node.defaultPreset || isOff(s)) {
                         node.setValue('preset', node.defaultPreset);
                         node.setValue('presetExpiry', undefined);
@@ -589,15 +608,15 @@ module.exports = function(RED) {
         if (node.broker && node.topic) {
             switch (node.advertiseType) {
                 case advNone:
-                    node.mqtt = new mqtt(node.deviceId, node.topic, node.broker, node.onMqttSet);
+                    node.mqtt = new mqtt(node.deviceId, node.topic, node.broker, node);
                     break;
                 case advThingzi:
                     let tztopic = `discovery/nodered/${node.deviceId}/config`;
-                    node.mqtt = new mqtt(node.deviceId, node.topic, node.broker, node.onMqttSet, tztopic, node.getThingziConfig());
+                    node.mqtt = new mqtt(node.deviceId, node.topic, node.broker, node, tztopic, node.getThingziConfig());
                     break;
                 case advHass:
                     let hatopic = `homeassistant/climate/${node.deviceId}/climate/config`;
-                    node.mqtt = new mqtt(node.deviceId, node.topic, node.broker, node.onMqttSet, hatopic, node.getHassConfig());
+                    node.mqtt = new mqtt(node.deviceId, node.topic, node.broker, node, hatopic, node.getHassConfig());
                     break;
             }
         }
@@ -615,6 +634,7 @@ module.exports = function(RED) {
                     node.mqtt.setValue('setpoint', node.setpoint.get());
                     node.mqtt.setValue('temp', node.temp.get());
                 }
+                node.mqtt.status();
             }
         }, 1000);
     });

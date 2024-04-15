@@ -1,12 +1,12 @@
 // Advertise over mqtt
-module.exports = function(id, topic, broker, onset, advtopic, advconfig) {
+module.exports = function(id, topic, broker, listener, advtopic, advconfig) {
     'use strict'
     let adv = this;
 
     this.id = id;
     this.topic = topic;
     this.broker = broker;
-    this.onset = onset;
+    this.listener = listener;
     this.advtopic = advtopic;
     this.advconfig = advconfig;
     this.connected = false;
@@ -19,6 +19,7 @@ module.exports = function(id, topic, broker, onset, advtopic, advconfig) {
             adv.broker.unsubscribe(adv.topic + '/#', adv.id, true);
             adv.broker.deregister(this, done);
             adv.started = false;
+            adv.listener = undefined;
         }
     }
 
@@ -29,24 +30,35 @@ module.exports = function(id, topic, broker, onset, advtopic, advconfig) {
 
         // Check that its a valid request
         if (len >= 2 && parts[len-1] === 'set') {
-            adv.onset(parts[len-2], payload.toString());
+            adv.listener?.onMqttSet(parts[len-2], payload.toString());
         }
     }
 
     // Listen for changes to status and look at connection state
-    this.status = function(s) {
+    this.status = function() {
         var con = adv.broker.connected;
         if (con != adv.connected) {
             if (con) {
                 // Advertise if set
                 if (adv.advtopic && adv.advconfig) {
-                    adv.broker.publish({ topic: adv.advtopic, payload: adv.advconfig, retain: true, qos: 1 });
+                    adv.listener?.onMqttInfo(`Advertise on '${adv.advtopic}'...`);
+                    adv.broker.publish({ topic: adv.advtopic, payload: adv.advconfig, retain: true, qos: 1 }, function(err) {
+                        if(err && err.warn) {
+                            adv.listener?.onMqttWarn(err);
+                        }
+                    });
+                } else {
+                    adv.listener?.onMqttInfo(`Advertisement disabled`);
                 }
 
                 // Queued items
                 for (const id in adv.queued) {
                     if (adv.queued.hasOwnProperty(id)) {
-                        adv.broker.publish({ topic: `${adv.topic}/${id}`, payload: adv.queued[id], retain: true, qos: 1 });
+                        adv.broker.publish({ topic: `${adv.topic}/${id}`, payload: adv.queued[id], retain: true, qos: 1 }, function(err) {
+                            if(err && err.warn) {
+                                adv.listener?.onMqttWarn(err);
+                            }
+                        });
                     }
                 }
 
@@ -54,13 +66,18 @@ module.exports = function(id, topic, broker, onset, advtopic, advconfig) {
             }
             
             adv.connected = con;
+            adv.listener?.onMqttConnect(con);
         }
     }
     
     this.setValue = function(id, value) {
         if (value !== undefined) {
             if (adv.connected) {
-                adv.broker.publish({ topic: `${adv.topic}/${id}`, payload: value, retain: true, qos: 1 });
+                adv.broker.publish({ topic: `${adv.topic}/${id}`, payload: value, retain: true, qos: 1 }, function(err) {
+                    if(err && err.warn) {
+                        adv.listener?.onMqttWarn(err);
+                    }
+                });
             } else {
                 adv.queued[id] = value;
             }
