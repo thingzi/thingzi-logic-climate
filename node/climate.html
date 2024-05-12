@@ -112,7 +112,8 @@
             }
         },
         oneditsave: function () {
-            this.outputs = $("#node-input-sendStatus").prop('checked') ? 3 : 2;
+            this.outputs = $('#node-input-climateType').val() === 'heat' ? 1 : 2;
+            this.outputs = $("#node-input-sendStatus").prop('checked') ? 3 : this.outputs;
         }
     });
 </script>
