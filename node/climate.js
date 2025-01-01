@@ -233,7 +233,9 @@ module.exports = function(RED) {
                 }
             };
 
-            if (node.defaultPreset !== presetNone) {
+            // Add the default preset if its different or not home assistant
+            // this is because home assistant implicitly allows 'none' as a preset
+            if (node.defaultPreset !== presetNone || node.advertiseType !== advHass) {
                 climate.preset_modes.unshift(node.defaultPreset)
             }
 
