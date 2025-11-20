@@ -366,14 +366,11 @@ module.exports = function(RED) {
             let canHeat = node.hasHeating && (s.mode === modeAuto || s.mode === modeHeat);
             let canCool = node.hasCooling && (s.mode === modeAuto || s.mode === modeCool);
             
-            // Use direction of temperature change to improve calculation and reduce ping pong effect
-            let isTempRising = node.lastTemp ? s.temp - node.lastTemp > 0.01 : false;
-            let isTempFalling = node.lastTemp ? s.temp - node.lastTemp < -0.01 : false;
-            let heatPoint = isTempFalling ? s.setpoint + node.tolerance : s.setpoint - node.tolerance;
-            let coolPoint = isTempRising ? s.setpoint - node.tolerance : s.setpoint + node.tolerance;
-
-            // Store last temp
-            node.lastTemp = s.temp;
+            // Use hysteresis based on current action to prevent ping-pong
+            let isCurrentlyHeating = node.lastAction === 'heating';
+            let isCurrentlyCooling = node.lastAction === 'cooling';
+            let heatPoint = isCurrentlyHeating ? s.setpoint : s.setpoint - node.tolerance;
+            let coolPoint = isCurrentlyCooling ? s.setpoint : s.setpoint + node.tolerance;
 
             // Calculate what to do based on temp, setpoint and other settings.
             if (canHeat && s.temp < heatPoint) {
