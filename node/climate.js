@@ -64,7 +64,7 @@ module.exports = function(RED) {
         this.topic = `${config.topic.trim('/')}/${this.deviceId}`;
 
         // Capabilities
-        this.hasHeating = config.climateType === climateBoth || config.climateType === climateHeat || config.climateType === climateManual
+        this.hasHeating = config.climateType === climateBoth || config.climateType === climateHeat || config.climateType === climateManual;
         this.hasCooling = config.climateType === climateBoth || config.climateType === climateCool || config.climateType === climateManual;
         this.hasSetpoint = config.climateType !== climateManual;
         this.hasAutoMode = this.hasSetpoint && this.hasHeating && this.hasCooling;
@@ -133,7 +133,7 @@ module.exports = function(RED) {
             node.warn(text);
         }
 
-        // Get thingZi advertise confog
+        // Get thingZi advertise config
         this.getThingziConfig = function() {
             let name = `${node.name} Climate`;
             let modes = [ offValue ];
@@ -177,6 +177,20 @@ module.exports = function(RED) {
                         metrics: true,
                         state_topic: `${node.topic}/action`
                     },
+                    { 
+                        id: 'heating',
+                        type: 'binary',
+                        name: `${name} Heat On`,
+                        metrics: false,
+                        state_topic: `${node.topic}/heating`
+                    },
+                    { 
+                        id: 'cooling',
+                        type: 'binary',
+                        name: `${name} Cool On`,
+                        metrics: false,
+                        state_topic: `${node.topic}/cool_on`
+                    }
                 ]
             };
 
@@ -212,7 +226,7 @@ module.exports = function(RED) {
             return climate;
         }
 
-        // Get HASS advertise confog
+        // Get HASS advertise config
         this.getHassConfig = function() {
             let climate = {
                 name: node.name,
@@ -270,7 +284,7 @@ module.exports = function(RED) {
             let value = isOn ? node.onPayload : node.offPayload;
             let type = isOn ? node.onPayloadType : node.offPayloadType;
 
-            if (value === undefined || value.length == 0 || type === undefined || type.length == 0) {
+            if (value === undefined || value.length === 0 || type === undefined || type.length === 0) {
                 value = isOn ? 'ON' : 'OFF';
                 type = 'str';
             }
@@ -464,16 +478,20 @@ module.exports = function(RED) {
                 node.lastChange = now;
                 node.lastAction = s.action;
                 node.setValue('action', s.action);
+                node.setValue('heating', heating);
+                node.setValue('cooling', cooling);
 
                 // Update last heat/cool time
-                if (heating || s.lastAction === 'heating') node.lastHeatTime = now;
-                if (cooling || s.lastAction === 'cooling') node.lastCoolTime = now;
+                if (heating || node.lastAction === 'heating') node.lastHeatTime = now;
+                if (cooling || node.lastAction === 'cooling') node.lastCoolTime = now;
             }
 
             // Send a message
             if (s.changed || s.keepAlive) {
                 node.lastSend = now;
                 node.setValue('action', s.action);
+                node.setValue('heating', heating);
+                node.setValue('cooling', cooling);
                 node.send([ 
                     { payload: node.getOutput(heating) }, 
                     { payload: node.getOutput(cooling) } 
