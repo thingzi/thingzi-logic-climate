@@ -59,9 +59,11 @@ Three advertising types (`advertiseType`):
 ### State Management
 
 The node uses Node-RED context storage for persisting state between deployments. Key stored values:
-- `mode`, `preset`, `setpoint`, `temp`, `tempTime`, `action`, `presetExpiry`
+- `mode`, `preset`, `setpoint`, `temp`, `tempTime`, `action`, `presetExpiry`, `heating`, `cooling`
 
 State is synchronized to MQTT topics under `{topic}/{deviceId}/{property}`.
+
+For thingZi discovery, additional binary properties `heating` and `cooling` are published to indicate current output states.
 
 ### Input Message Properties
 
