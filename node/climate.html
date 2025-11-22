@@ -16,7 +16,8 @@
             // Setpoint
             degrees: {value: 'C', required:true},
             defaultSetPoint: {value: 20, required:true},
-            tolerance: {value: 0.2, required:true},    
+            tolerance: {value: 0.2, required:true},
+            thermalLag: {value: 3, required:true},
             minTemp: {value: 5, required:true},
             maxTemp: {value: 25, required:true},
             tempValid: {value: 60, required:true},
@@ -86,6 +87,10 @@
 
             if (!$('#node-input-maxTemp').val()) {
                 $('#node-input-maxTemp').val('25')
+            }
+
+            if (!$('#node-input-thermalLag').val()) {
+                $('#node-input-thermalLag').val('3')
             }
 
             $("#node-input-onPayloadType").val(this.onPayloadType);
@@ -186,11 +191,18 @@
             <label>degrees</label>
         </div>
         <div class="form-row">
-            <label title="Heating tolerance around the set point. Heating or cooling will be disabled within this range to avoid overshooting the set point." for="node-input-tolerance">
+            <label title="Temperature threshold around setpoint. Heating turns on when temp < setpoint - tolerance. Cooling turns on when temp > setpoint + tolerance." for="node-input-tolerance">
                 <i class="fa fa-sliders"></i> Tolerance
             </label>
             <input type="number" id="node-input-tolerance" min="0" max="5" step="0.1" style="width: 60px">
             <label>degrees</label>
+        </div>
+        <div class="form-row">
+            <label title="Estimated thermal lag time in minutes. Used to predict temperature overshoot based on rate of change. Higher values turn off heating/cooling earlier. Set to 0 to disable predictive control." for="node-input-thermalLag">
+                <i class="fa fa-clock-o"></i> Thermal Lag
+            </label>
+            <input type="number" id="node-input-thermalLag" min="0" max="10" step="0.5" style="width: 60px">
+            <label>minute(s)</label>
         </div>
         <div class="form-row">
             <label title="Minimum set point temperature" for="node-input-minTemp">
@@ -273,7 +285,9 @@
         <dt class="optional">temp <span class="property-type">string</span></dt>
         <dd> Numeric value of current temperature, read this from a thermostat.</dd>
         <dt class="optional">tolerance <span class="property-type">string</span></dt>
-        <dd> Numeric value of tolerance dead zone to use when deciding if to heat or cool. Will be reset after every deploy.</dd>
+        <dd> Numeric value of tolerance around setpoint.</dd>
+        <dt class="optional">thermalLag <span class="property-type">string</span></dt>
+        <dd> Numeric value of thermal lag in minutes for predictive control.</dd>
     </dl>
   
     <h3>Outputs</h3>

@@ -47,10 +47,14 @@ module.exports = function(RED) {
         this.degrees = config.degrees;
         this.defaultSetPoint = parseFloat(config.defaultSetPoint);
         this.tolerance = parseFloat(config.tolerance);
+        this.thermalLagMs = (parseFloat(config.thermalLag) || 0) * 1000 * 60; //< mins to ms
         this.minTemp = parseFloat(config.minTemp);
         this.maxTemp = parseFloat(config.maxTemp);
         this.tempValidMs = parseFloat(config.tempValid) * 1000 * 60; //< mins to ms
         this.swapDelayMs = parseFloat(config.swapDelay) * 1000 * 60; //< mins to ms
+
+        // Temperature history for rate calculation
+        this.tempHistory = [];
         
         // Outputs
         this.onPayload = config.onPayload;
@@ -93,6 +97,7 @@ module.exports = function(RED) {
             if (msg.hasOwnProperty('setpoint')) { node.setpoint.set(msg.setpoint); }
             if (msg.hasOwnProperty('temp')) { node.temp.set(msg.temp); }
             if (msg.hasOwnProperty('tolerance')) { this.tolerance = parseFloat(msg.tolerance); }
+            if (msg.hasOwnProperty('thermalLag')) { this.thermalLagMs = parseFloat(msg.thermalLag) * 1000 * 60; }
 
             // Backwards compatibility
             if (msg.hasOwnProperty('boost')) { node.preset.set(isOn(msg.boost) ? presetBoost : node.defaultPreset); }
@@ -355,6 +360,33 @@ module.exports = function(RED) {
             }
         }
 
+        // Calculate temperature rate of change (degrees per minute)
+        this.calcTempRate = function(temp, now) {
+            // Add current reading to history
+            node.tempHistory.push({ temp: temp, time: now.valueOf() });
+
+            // Keep only last 5 minutes of readings
+            const maxAge = 5 * 60 * 1000;
+            node.tempHistory = node.tempHistory.filter(h => now.valueOf() - h.time <= maxAge);
+
+            // Need at least 2 readings for rate calculation
+            if (node.tempHistory.length < 2) {
+                return 0;
+            }
+
+            // Calculate rate from oldest to newest reading
+            const oldest = node.tempHistory[0];
+            const newest = node.tempHistory[node.tempHistory.length - 1];
+            const timeDiffMs = newest.time - oldest.time;
+
+            if (timeDiffMs < 30000) { // Need at least 30 seconds
+                return 0;
+            }
+
+            // Return rate in degrees per minute
+            return (newest.temp - oldest.temp) / (timeDiffMs / 60000);
+        }
+
         this.calcSetpointAction = function(s, now) {
             // Waiting for input
             if (!s.tempTime || now.diff(s.tempTime) >= node.tempValidMs) {
@@ -364,13 +396,46 @@ module.exports = function(RED) {
             // Get Current Capability
             let canHeat = node.hasHeating && (s.mode === modeAuto || s.mode === modeHeat);
             let canCool = node.hasCooling && (s.mode === modeAuto || s.mode === modeCool);
-            
-            // Only heat or cool if temp is outside of setpoint ± tolerance
+
+            // Calculate temperature rate of change
+            const tempRate = node.calcTempRate(s.temp, now);
+
+            // Predict temperature after thermal lag
+            let predictedTemp = s.temp;
+            if (node.thermalLagMs > 0 && tempRate !== 0) {
+                predictedTemp = s.temp + (tempRate * (node.thermalLagMs / 60000));
+            }
+
+            // Currently heating - check if we should turn off
+            if (node.lastAction === 'heating' && canHeat) {
+                // Turn off when predicted temp reaches setpoint
+                if (predictedTemp >= s.setpoint) {
+                    return offValue;
+                }
+                // Stay heating
+                return 'heating';
+            }
+
+            // Currently cooling - check if we should turn off
+            if (node.lastAction === 'cooling' && canCool) {
+                // Turn off when predicted temp reaches setpoint
+                if (predictedTemp <= s.setpoint) {
+                    return offValue;
+                }
+                // Stay cooling
+                return 'cooling';
+            }
+
+            // Not currently heating/cooling - check if we should turn on
+            // Turn heating ON when temp drops below setpoint - tolerance
             if (canHeat && s.temp < s.setpoint - node.tolerance) {
-                if (!node.lastCoolTime || now.diff(node.lastCoolTime) >= node.swapDelayMs ) {
+                if (!node.lastCoolTime || now.diff(node.lastCoolTime) >= node.swapDelayMs) {
                     return 'heating';
                 }
-            } else if (canCool && s.temp > s.setpoint + node.tolerance) {
+            }
+
+            // Turn cooling ON when temp rises above setpoint + tolerance
+            if (canCool && s.temp > s.setpoint + node.tolerance) {
                 if (!node.lastHeatTime || now.diff(node.lastHeatTime) >= node.swapDelayMs) {
                     return 'cooling';
                 }
