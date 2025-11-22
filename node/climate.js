@@ -536,6 +536,9 @@ module.exports = function(RED) {
                 node.setValue('heating', heating);
                 node.setValue('cooling', cooling);
 
+                // Clear temp history when action changes for fresh rate calculation
+                node.tempHistory = [];
+
                 // Update last heat/cool time
                 if (heating || node.lastAction === 'heating') node.lastHeatTime = now;
                 if (cooling || node.lastAction === 'cooling') node.lastCoolTime = now;
