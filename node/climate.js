@@ -356,7 +356,6 @@ module.exports = function(RED) {
         }
 
         this.calcSetpointAction = function(s, now) {
-
             // Waiting for input
             if (!s.tempTime || now.diff(s.tempTime) >= node.tempValidMs) {
                 return 'idle';
@@ -366,18 +365,12 @@ module.exports = function(RED) {
             let canHeat = node.hasHeating && (s.mode === modeAuto || s.mode === modeHeat);
             let canCool = node.hasCooling && (s.mode === modeAuto || s.mode === modeCool);
             
-            // Use hysteresis based on current action to prevent ping-pong
-            let isCurrentlyHeating = node.lastAction === 'heating';
-            let isCurrentlyCooling = node.lastAction === 'cooling';
-            let heatPoint = isCurrentlyHeating ? s.setpoint : s.setpoint - node.tolerance;
-            let coolPoint = isCurrentlyCooling ? s.setpoint : s.setpoint + node.tolerance;
-
-            // Calculate what to do based on temp, setpoint and other settings.
-            if (canHeat && s.temp < heatPoint) {
+            // Only heat or cool if temp is outside of setpoint ± tolerance
+            if (canHeat && s.temp < s.setpoint - node.tolerance) {
                 if (!node.lastCoolTime || now.diff(node.lastCoolTime) >= node.swapDelayMs ) {
                     return 'heating';
                 }
-            } else if (canCool && s.temp > coolPoint) {
+            } else if (canCool && s.temp > s.setpoint + node.tolerance) {
                 if (!node.lastHeatTime || now.diff(node.lastHeatTime) >= node.swapDelayMs) {
                     return 'cooling';
                 }
