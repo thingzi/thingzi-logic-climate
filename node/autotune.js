@@ -10,7 +10,6 @@ class AutoTune {
         this.node = node;
 
         // Cycle tracking
-        this.cycleStopTemp = null;
         this.cycleStopRate = null;
         this.cycleStopTime = null;
         this.cyclePeakTemp = null;
@@ -61,7 +60,7 @@ class AutoTune {
         // Require minimum rate to avoid bad calculations from short cycles
         const absRate = Math.abs(stopRate);
         if (absRate < node.minAutoTuneRate) {
-            node.log(`Auto-tune skipped: rate too low (${absRate.toFixed(3)}°${node.degrees}/min) - need longer ${cycleType} cycle`);
+            node.debug(`Auto-tune skipped: rate too low (${absRate.toFixed(3)}°${node.degrees}/min) - need longer ${cycleType} cycle`);
             return;
         }
 
@@ -254,13 +253,11 @@ class AutoTune {
     recordActionChange(lastAction, newAction, temp, tempRate, now) {
         // Track when heating/cooling stops (for Lag Off)
         if (lastAction === 'heating' && newAction !== 'heating') {
-            this.cycleStopTemp = temp;
             this.cycleStopRate = tempRate;
             this.cycleStopTime = now.valueOf();
             this.cyclePeakTemp = temp;
             this.cycleType = 'heating';
         } else if (lastAction === 'cooling' && newAction !== 'cooling') {
-            this.cycleStopTemp = temp;
             this.cycleStopRate = tempRate;
             this.cycleStopTime = now.valueOf();
             this.cyclePeakTemp = temp;
@@ -270,7 +267,6 @@ class AutoTune {
         else if (lastAction !== 'heating' && newAction === 'heating') {
             // Only track if temperature was actually falling (ambient cooling)
             if (tempRate < 0) {
-                this.cycleStopTemp = temp;
                 this.cycleStopRate = tempRate;
                 this.cycleStopTime = now.valueOf();
                 this.cyclePeakTemp = temp;
@@ -279,7 +275,6 @@ class AutoTune {
         } else if (lastAction !== 'cooling' && newAction === 'cooling') {
             // Only track if temperature was actually rising (ambient heating)
             if (tempRate > 0) {
-                this.cycleStopTemp = temp;
                 this.cycleStopRate = tempRate;
                 this.cycleStopTime = now.valueOf();
                 this.cyclePeakTemp = temp;

@@ -90,7 +90,6 @@ module.exports = function(RED) {
         // Previous state
         this.lastChange = null;
         this.lastAction = null;
-        this.lastTemp = null;
         this.lastHeatTime = null;
         this.lastCoolTime = null;
         this.lastSend = null;
@@ -574,14 +573,11 @@ module.exports = function(RED) {
                 const tempRate = node.calcTempRate(s.temp, now);
                 node.autoTune.recordActionChange(node.lastAction, s.action, s.temp, tempRate, now);
 
-                node.lastAction = s.action;
-                node.setValue('action', s.action);
-                node.setValue('heating', heating);
-                node.setValue('cooling', cooling);
-
-                // Update last heat/cool time
+                // Update last heat/cool time (before updating lastAction)
                 if (heating || node.lastAction === 'heating') node.lastHeatTime = now;
                 if (cooling || node.lastAction === 'cooling') node.lastCoolTime = now;
+
+                node.lastAction = s.action;
             }
 
             // Send a message
@@ -590,9 +586,9 @@ module.exports = function(RED) {
                 node.setValue('action', s.action);
                 node.setValue('heating', heating);
                 node.setValue('cooling', cooling);
-                node.send([ 
-                    { payload: node.getOutput(heating) }, 
-                    { payload: node.getOutput(cooling) } 
+                node.send([
+                    { payload: node.getOutput(heating) },
+                    { payload: node.getOutput(cooling) }
                 ]);
             }
 
@@ -639,8 +635,8 @@ module.exports = function(RED) {
                     } 
                 }
             };
-            this.valid = function name(v) {
-                return v === offValue || (v === modeAuto && node.hasAutoMode) || 
+            this.valid = function(v) {
+                return v === offValue || (v === modeAuto && node.hasAutoMode) ||
                     (v === modeCool && node.hasCooling) || (v === modeHeat && node.hasHeating);
             }
         };
