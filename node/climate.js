@@ -55,6 +55,9 @@ module.exports = function(RED) {
         this.tempValidMs = parseFloat(config.tempValid) * 1000 * 60; //< mins to ms
         this.swapDelayMs = parseFloat(config.swapDelay) * 1000 * 60; //< mins to ms
 
+        // Minimum rate for auto-tune (scaled for Fahrenheit)
+        this.minAutoTuneRate = this.degrees === 'F' ? 0.0144 : 0.008; // °/min
+
         // Temperature history for rate calculation
         this.tempHistory = [];
         
@@ -422,8 +425,8 @@ module.exports = function(RED) {
 
             // Require minimum rate to avoid bad calculations from short cycles
             const absRate = Math.abs(stopRate);
-            if (absRate < 0.008) {
-                node.log(`Auto-tune skipped: rate too low (${absRate.toFixed(3)}°C/min) - need longer ${cycleType} cycle`);
+            if (absRate < node.minAutoTuneRate) {
+                node.log(`Auto-tune skipped: rate too low (${absRate.toFixed(3)}°${node.degrees}/min) - need longer ${cycleType} cycle`);
                 return;
             }
 
