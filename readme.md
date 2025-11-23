@@ -14,6 +14,8 @@ Note that scheduling is intentionally not part of the climate node to maximise r
 - Integration with MQTT and/or homeassistant.
 - Safety cut out when temperature readings are stale (when setpoint is active).
 - Configure minimum cycle time to protect equipment from rapid changes of state.
+- Thermal lag prediction to hit setpoint accurately without overshooting.
+- Auto-tune feature learns optimal thermal lag values from heating/cooling cycles.
 - Manual control for simpler use cases e.g. hot water timers that do not need a setpoint but require keep alive or boost functionality.
 - Optional node status output to aid with debugging or deeper integration.
 

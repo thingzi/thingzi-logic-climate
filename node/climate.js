@@ -47,7 +47,9 @@ module.exports = function(RED) {
         this.degrees = config.degrees;
         this.defaultSetPoint = parseFloat(config.defaultSetPoint);
         this.tolerance = parseFloat(config.tolerance);
-        this.thermalLagMs = (parseFloat(config.thermalLag) || 0) * 1000 * 60; //< mins to ms
+        this.thermalLagUpMs = (parseFloat(config.thermalLagUp) || parseFloat(config.thermalLagOff) || parseFloat(config.thermalLag) || 0) * 1000 * 60; //< mins to ms (temp rising)
+        this.thermalLagDnMs = (parseFloat(config.thermalLagDn) || parseFloat(config.thermalLagOn) || 0) * 1000 * 60; //< mins to ms (temp falling)
+        this.thermalLagTune = config.thermalLagTune || config.autoTune || 'off';
         this.minTemp = parseFloat(config.minTemp);
         this.maxTemp = parseFloat(config.maxTemp);
         this.tempValidMs = parseFloat(config.tempValid) * 1000 * 60; //< mins to ms
@@ -89,6 +91,13 @@ module.exports = function(RED) {
         this.lastCoolTime = null;
         this.lastSend = null;
 
+        // Auto-tune cycle tracking
+        this.cycleStopTemp = null;
+        this.cycleStopRate = null;
+        this.cycleStopTime = null;
+        this.cyclePeakTemp = null;
+        this.cycleType = null; // 'heating' or 'cooling'
+
         // Handle direct inputs
         this.on("input", function(msg, send, done) {
             if (msg.hasOwnProperty('payload')) { node.mode.set(msg.payload); }
@@ -97,7 +106,11 @@ module.exports = function(RED) {
             if (msg.hasOwnProperty('setpoint')) { node.setpoint.set(msg.setpoint); }
             if (msg.hasOwnProperty('temp')) { node.temp.set(msg.temp); }
             if (msg.hasOwnProperty('tolerance')) { this.tolerance = parseFloat(msg.tolerance); }
-            if (msg.hasOwnProperty('thermalLag')) { this.thermalLagMs = parseFloat(msg.thermalLag) * 1000 * 60; }
+            if (msg.hasOwnProperty('thermalLagUp')) { this.thermalLagUpMs = parseFloat(msg.thermalLagUp) * 1000 * 60; }
+            if (msg.hasOwnProperty('thermalLagDn')) { this.thermalLagDnMs = parseFloat(msg.thermalLagDn) * 1000 * 60; }
+            // Backwards compatibility
+            if (msg.hasOwnProperty('thermalLagOff')) { this.thermalLagUpMs = parseFloat(msg.thermalLagOff) * 1000 * 60; }
+            if (msg.hasOwnProperty('thermalLagOn')) { this.thermalLagDnMs = parseFloat(msg.thermalLagOn) * 1000 * 60; }
 
             // Backwards compatibility
             if (msg.hasOwnProperty('boost')) { node.preset.set(isOn(msg.boost) ? presetBoost : node.defaultPreset); }
@@ -387,6 +400,93 @@ module.exports = function(RED) {
             return (newest.temp - oldest.temp) / (timeDiffMs / 60000);
         }
 
+        // Get auto-tuned values from context
+        this.getAutoTuneValues = function() {
+            return {
+                heating: node.context().get('autoTuneHeating') || { cycles: 0, lags: [], min: null, max: null },
+                cooling: node.context().get('autoTuneCooling') || { cycles: 0, lags: [], min: null, max: null }
+            };
+        }
+
+        // Calculate median of array
+        this.calcMedian = function(arr) {
+            if (arr.length === 0) return null;
+            const sorted = [...arr].sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        }
+
+        // Update auto-tune with a completed cycle
+        this.updateAutoTune = function(_stopTemp, stopRate, peakTemp, setpoint, cycleType) {
+            if (node.thermalLagTune !== 'auto') return;
+
+            // Require minimum rate to avoid bad calculations from short cycles
+            const absRate = Math.abs(stopRate);
+            if (absRate < 0.008) {
+                node.log(`Auto-tune skipped: rate too low (${absRate.toFixed(3)}°C/min) - need longer ${cycleType} cycle`);
+                return;
+            }
+
+            let auto = node.getAutoTuneValues();
+
+            if (cycleType === 'heating') {
+                // Calculate ideal lag based on overshoot (temp went above setpoint)
+                const overshoot = peakTemp - setpoint;
+                const idealLagMins = overshoot / stopRate;
+                const clampedLag = Math.max(1, Math.min(30, idealLagMins));
+
+                // Update heating data
+                let data = auto.heating;
+                data.lags.push(clampedLag);
+                if (data.lags.length > 5) data.lags.shift(); // Keep last 5
+                data.cycles++;
+                data.min = data.min === null ? clampedLag : Math.min(data.min, clampedLag);
+                data.max = data.max === null ? clampedLag : Math.max(data.max, clampedLag);
+
+                node.context().set('autoTuneHeating', data);
+                const median = node.calcMedian(data.lags);
+                node.log(`Auto-tune heating cycle ${data.cycles}: overshoot=${overshoot.toFixed(2)}°C, rate=${stopRate.toFixed(3)}°C/min, ideal=${idealLagMins.toFixed(1)}min, median=${median.toFixed(1)}min [${data.lags.map(l => l.toFixed(1)).join(', ')}]`);
+            } else if (cycleType === 'cooling') {
+                // Calculate ideal lag based on undershoot (temp went below setpoint)
+                const undershoot = setpoint - peakTemp;
+                const idealLagMins = undershoot / absRate;
+                const clampedLag = Math.max(0, Math.min(10, idealLagMins));
+
+                // Update cooling data
+                let data = auto.cooling;
+                data.lags.push(clampedLag);
+                if (data.lags.length > 5) data.lags.shift(); // Keep last 5
+                data.cycles++;
+                data.min = data.min === null ? clampedLag : Math.min(data.min, clampedLag);
+                data.max = data.max === null ? clampedLag : Math.max(data.max, clampedLag);
+
+                node.context().set('autoTuneCooling', data);
+                const median = node.calcMedian(data.lags);
+                node.log(`Auto-tune cooling cycle ${data.cycles}: undershoot=${undershoot.toFixed(2)}°C, rate=${stopRate.toFixed(3)}°C/min, ideal=${idealLagMins.toFixed(1)}min, median=${median.toFixed(1)}min [${data.lags.map(l => l.toFixed(1)).join(', ')}]`);
+            }
+        }
+
+        // Get effective thermal lag (auto-tuned if enabled and sufficient cycles)
+        this.getEffectiveLagUp = function() {
+            if (node.thermalLagTune === 'auto') {
+                const auto = node.getAutoTuneValues();
+                if (auto.heating.cycles >= 3 && auto.heating.lags.length > 0) {
+                    return node.calcMedian(auto.heating.lags) * 60000; // Convert mins to ms
+                }
+            }
+            return node.thermalLagUpMs;
+        }
+
+        this.getEffectiveLagDn = function() {
+            if (node.thermalLagTune === 'auto') {
+                const auto = node.getAutoTuneValues();
+                if (auto.cooling.cycles >= 3 && auto.cooling.lags.length > 0) {
+                    return node.calcMedian(auto.cooling.lags) * 60000; // Convert mins to ms
+                }
+            }
+            return node.thermalLagDnMs;
+        }
+
         this.calcSetpointAction = function(s, now) {
             // Waiting for input
             if (!s.tempTime || now.diff(s.tempTime) >= node.tempValidMs) {
@@ -400,16 +500,26 @@ module.exports = function(RED) {
             // Calculate temperature rate of change
             const tempRate = node.calcTempRate(s.temp, now);
 
-            // Predict temperature after thermal lag
-            let predictedTemp = s.temp;
-            if (node.thermalLagMs > 0 && tempRate !== 0) {
-                predictedTemp = s.temp + (tempRate * (node.thermalLagMs / 60000));
+            // Get effective thermal lag (may be auto-tuned)
+            const effectiveLagUpMs = node.getEffectiveLagUp();
+            const effectiveLagDnMs = node.getEffectiveLagDn();
+
+            // Predict temperature after thermal lag (different for turn-on vs turn-off)
+            let predictedTempOff = s.temp;
+            let predictedTempOn = s.temp;
+            if (tempRate !== 0) {
+                if (effectiveLagUpMs > 0) {
+                    predictedTempOff = s.temp + (tempRate * (effectiveLagUpMs / 60000));
+                }
+                if (effectiveLagDnMs > 0) {
+                    predictedTempOn = s.temp + (tempRate * (effectiveLagDnMs / 60000));
+                }
             }
 
             // Currently heating - check if we should turn off
             if (node.lastAction === 'heating' && canHeat) {
                 // Turn off when predicted temp reaches setpoint
-                if (predictedTemp >= s.setpoint) {
+                if (predictedTempOff >= s.setpoint) {
                     return offValue;
                 }
                 // Stay heating
@@ -419,7 +529,7 @@ module.exports = function(RED) {
             // Currently cooling - check if we should turn off
             if (node.lastAction === 'cooling' && canCool) {
                 // Turn off when predicted temp reaches setpoint
-                if (predictedTemp <= s.setpoint) {
+                if (predictedTempOff <= s.setpoint) {
                     return offValue;
                 }
                 // Stay cooling
@@ -427,17 +537,27 @@ module.exports = function(RED) {
             }
 
             // Not currently heating/cooling - check if we should turn on
-            // Turn heating ON when temp drops below setpoint - tolerance
-            if (canHeat && s.temp < s.setpoint - node.tolerance) {
-                if (!node.lastCoolTime || now.diff(node.lastCoolTime) >= node.swapDelayMs) {
-                    return 'heating';
+            // Turn heating ON when temp drops to setpoint - tolerance
+            // Only consider heating when temp is falling or flat (not rising from coast)
+            if (canHeat && tempRate <= 0) {
+                const heatThreshold = s.setpoint - node.tolerance;
+                const heatCheckTemp = (tempRate < 0 && effectiveLagDnMs > 0) ? predictedTempOn : s.temp;
+                if (heatCheckTemp <= heatThreshold) {
+                    if (!node.lastCoolTime || now.diff(node.lastCoolTime) >= node.swapDelayMs) {
+                        return 'heating';
+                    }
                 }
             }
 
-            // Turn cooling ON when temp rises above setpoint + tolerance
-            if (canCool && s.temp > s.setpoint + node.tolerance) {
-                if (!node.lastHeatTime || now.diff(node.lastHeatTime) >= node.swapDelayMs) {
-                    return 'cooling';
+            // Turn cooling ON when temp rises to setpoint + tolerance
+            // Only consider cooling when temp is rising or flat (not falling from coast)
+            if (canCool && tempRate >= 0) {
+                const coolThreshold = s.setpoint + node.tolerance;
+                const coolCheckTemp = (tempRate > 0 && effectiveLagDnMs > 0) ? predictedTempOn : s.temp;
+                if (coolCheckTemp >= coolThreshold) {
+                    if (!node.lastHeatTime || now.diff(node.lastHeatTime) >= node.swapDelayMs) {
+                        return 'cooling';
+                    }
                 }
             }
 
@@ -479,6 +599,34 @@ module.exports = function(RED) {
                 pending: false,
                 keepAlive: false
             };
+
+            // Auto-tune: track peak/trough temperature after heating/cooling stops
+            if (node.cycleStopTime && s.temp !== undefined) {
+                const tempRate = node.calcTempRate(s.temp, now);
+                const elapsed = now.valueOf() - node.cycleStopTime;
+
+                if (node.cycleType === 'heating') {
+                    // Track peak (max temp) after heating stops
+                    if (s.temp > node.cyclePeakTemp) {
+                        node.cyclePeakTemp = s.temp;
+                    }
+                    // Detect peak when rate turns negative or 20 mins elapsed
+                    if (tempRate < 0 || elapsed > 20 * 60 * 1000) {
+                        node.updateAutoTune(node.cycleStopTemp, node.cycleStopRate, node.cyclePeakTemp, s.setpoint, 'heating');
+                        node.cycleStopTime = null;
+                    }
+                } else if (node.cycleType === 'cooling') {
+                    // Track trough (min temp) after cooling stops
+                    if (s.temp < node.cyclePeakTemp) {
+                        node.cyclePeakTemp = s.temp;
+                    }
+                    // Detect trough when rate turns positive or 20 mins elapsed
+                    if (tempRate > 0 || elapsed > 20 * 60 * 1000) {
+                        node.updateAutoTune(node.cycleStopTemp, node.cycleStopRate, node.cyclePeakTemp, s.setpoint, 'cooling');
+                        node.cycleStopTime = null;
+                    }
+                }
+            }
 
             // Use default mode for boosting
             if (s.preset === presetBoost) {
@@ -531,13 +679,28 @@ module.exports = function(RED) {
 
                 // Store states for future checks
                 node.lastChange = now;
+
+                // Auto-tune: track when heating/cooling stops
+                if (node.lastAction === 'heating' && s.action !== 'heating') {
+                    const tempRate = node.calcTempRate(s.temp, now);
+                    node.cycleStopTemp = s.temp;
+                    node.cycleStopRate = tempRate;
+                    node.cycleStopTime = now.valueOf();
+                    node.cyclePeakTemp = s.temp;
+                    node.cycleType = 'heating';
+                } else if (node.lastAction === 'cooling' && s.action !== 'cooling') {
+                    const tempRate = node.calcTempRate(s.temp, now);
+                    node.cycleStopTemp = s.temp;
+                    node.cycleStopRate = tempRate;
+                    node.cycleStopTime = now.valueOf();
+                    node.cyclePeakTemp = s.temp;
+                    node.cycleType = 'cooling';
+                }
+
                 node.lastAction = s.action;
                 node.setValue('action', s.action);
                 node.setValue('heating', heating);
                 node.setValue('cooling', cooling);
-
-                // Clear temp history when action changes for fresh rate calculation
-                node.tempHistory = [];
 
                 // Update last heat/cool time
                 if (heating || node.lastAction === 'heating') node.lastHeatTime = now;
