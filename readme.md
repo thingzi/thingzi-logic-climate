@@ -23,14 +23,14 @@ Note that scheduling is intentionally not part of the climate node to maximise r
 
 Heating systems have thermal inertia - radiators continue releasing heat after being turned off, and rooms take time to respond to temperature changes. Without accounting for this, systems overshoot the setpoint.
 
-**Lag Up** (turn-off prediction): When heating is active and temperature is rising, the system predicts where temperature will be after the configured lag period. It turns off early so the residual heat brings the room to exactly the setpoint. Higher values = earlier turn-off.
+**Lag Off** (turn-off prediction): When heating is active and temperature is rising, the system predicts where temperature will be after the configured lag period. It turns off early so the residual heat brings the room to exactly the setpoint. Higher values = earlier turn-off.
 
-**Lag Down** (turn-on prediction): When temperature is falling toward the tolerance threshold, the system can turn on early to prevent dropping too far below setpoint. Higher values = earlier turn-on.
+**Lag On** (turn-on prediction): When temperature is falling toward the tolerance threshold, the system can turn on early to prevent dropping too far below setpoint. Higher values = earlier turn-on.
 
 Typical values:
-- Underfloor heating: 20-30 min lag up (high thermal mass)
-- Radiators: 8-12 min lag up
-- Fan heaters: 2-5 min lag up
+- Underfloor heating: 20-30 min lag off (high thermal mass)
+- Radiators: 8-12 min lag off
+- Fan heaters: 2-5 min lag off
 
 **Auto-tune**: Enable "Lag Tune" to let the system learn optimal values automatically. It observes overshoot after each heating cycle and calculates the ideal lag. After 3+ cycles, it uses the median of the last 5 measurements. This adapts to your specific heating system characteristics.
 

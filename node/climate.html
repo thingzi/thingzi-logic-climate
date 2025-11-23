@@ -17,8 +17,8 @@
             degrees: {value: 'C', required:true},
             defaultSetPoint: {value: 20, required:true},
             tolerance: {value: 0.1, required:true},
-            thermalLagUp: {value: 10, required:true},
-            thermalLagDn: {value: 3, required:true},
+            thermalLagOff: {value: 10, required:true},
+            thermalLagOn: {value: 3, required:true},
             thermalLagTune: {value: 'off', required:true},
             minTemp: {value: 5, required:true},
             maxTemp: {value: 25, required:true},
@@ -91,12 +91,12 @@
                 $('#node-input-maxTemp').val('25')
             }
 
-            if (!$('#node-input-thermalLagUp').val()) {
-                $('#node-input-thermalLagUp').val('10')
+            if (!$('#node-input-thermalLagOff').val()) {
+                $('#node-input-thermalLagOff').val('10')
             }
 
-            if (!$('#node-input-thermalLagDn').val()) {
-                $('#node-input-thermalLagDn').val('3')
+            if (!$('#node-input-thermalLagOn').val()) {
+                $('#node-input-thermalLagOn').val('3')
             }
 
             // Backwards compatibility for thermal lag tune
@@ -226,17 +226,17 @@
             <label>degrees</label>
         </div>
         <div class="form-row">
-            <label title="Thermal lag for temp rising in minutes. Predicts overshoot when heating stops. Higher values turn off earlier. Set to 0 to disable." for="node-input-thermalLagUp">
-                <i class="fa fa-arrow-up"></i> Lag Up
+            <label title="Thermal lag in minutes for turn-off prediction. Predicts overshoot when heating/cooling stops. Higher values turn off earlier. Set to 0 to disable." for="node-input-thermalLagOff">
+                <i class="fa fa-stop-circle"></i> Lag Off
             </label>
-            <input type="number" id="node-input-thermalLagUp" min="0" max="30" step="0.5" style="width: 60px">
+            <input type="number" id="node-input-thermalLagOff" min="0" max="30" step="0.5" style="width: 60px">
             <label>minute(s)</label>
         </div>
         <div class="form-row">
-            <label title="Thermal lag for temp falling in minutes. Predicts when temperature will reach tolerance threshold. Higher values turn on earlier. Set to 0 to use tolerance only." for="node-input-thermalLagDn">
-                <i class="fa fa-arrow-down"></i> Lag Down
+            <label title="Thermal lag in minutes for turn-on prediction. Predicts when temperature will reach tolerance threshold. Higher values turn on earlier. Set to 0 to disable." for="node-input-thermalLagOn">
+                <i class="fa fa-play-circle"></i> Lag On
             </label>
-            <input type="number" id="node-input-thermalLagDn" min="0" max="10" step="0.5" style="width: 60px">
+            <input type="number" id="node-input-thermalLagOn" min="0" max="10" step="0.5" style="width: 60px">
             <label>minute(s)</label>
         </div>
         <div class="form-row">
@@ -316,10 +316,10 @@
         <dd> Numeric value of current temperature, read this from a thermostat.</dd>
         <dt class="optional">tolerance <span class="property-type">string</span></dt>
         <dd> Numeric value of tolerance around setpoint.</dd>
-        <dt class="optional">thermalLagUp <span class="property-type">string</span></dt>
-        <dd> Numeric value of thermal lag in minutes when temp is rising. Higher values turn off earlier.</dd>
-        <dt class="optional">thermalLagDn <span class="property-type">string</span></dt>
-        <dd> Numeric value of thermal lag in minutes when temp is falling. Higher values turn on earlier.</dd>
+        <dt class="optional">thermalLagOff <span class="property-type">string</span></dt>
+        <dd> Numeric value of thermal lag in minutes for turn-off prediction. Higher values turn off earlier.</dd>
+        <dt class="optional">thermalLagOn <span class="property-type">string</span></dt>
+        <dd> Numeric value of thermal lag in minutes for turn-on prediction. Higher values turn on earlier.</dd>
     </dl>
   
     <h3>Outputs</h3>
