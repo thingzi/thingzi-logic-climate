@@ -31,21 +31,21 @@ class AutoTune {
      */
     getValues() {
         const node = this.node;
-        const defaultData = { cycles: 0, lags: [], min: null, max: null };
+        const newData = () => ({ cycles: 0, lags: [], min: null, max: null });
 
         // Load heating data (off = turn-off prediction, on = turn-on prediction)
         let heating = node.context().get('autoTuneHeating');
-        heating = heating || { off: { ...defaultData }, on: { ...defaultData } };
+        heating = heating || { off: newData(), on: newData() };
         // Ensure structure has both keys
-        if (!heating.off) heating.off = { ...defaultData };
-        if (!heating.on) heating.on = { ...defaultData };
+        if (!heating.off) heating.off = newData();
+        if (!heating.on) heating.on = newData();
 
         // Load cooling data (off = turn-off prediction, on = turn-on prediction)
         let cooling = node.context().get('autoTuneCooling');
-        cooling = cooling || { off: { ...defaultData }, on: { ...defaultData } };
+        cooling = cooling || { off: newData(), on: newData() };
         // Ensure structure has both keys
-        if (!cooling.off) cooling.off = { ...defaultData };
-        if (!cooling.on) cooling.on = { ...defaultData };
+        if (!cooling.off) cooling.off = newData();
+        if (!cooling.on) cooling.on = newData();
 
         return { heating, cooling };
     }
